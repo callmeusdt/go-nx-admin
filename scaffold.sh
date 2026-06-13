@@ -120,6 +120,14 @@ else
     echo "  -> config.example.yaml"
 fi
 
+# —— config.yaml ——
+if [ -f "config.yaml" ]; then
+    echo "跳过: config.yaml 已存在"
+else
+    cp "$SCRIPT_DIR/config.example.yaml" config.yaml
+    echo "  -> config.yaml"
+fi
+
 # —— Makefile ——
 cat > Makefile << MAKE
 BACKEND_DIR = go-nx-admin/backend
@@ -491,9 +499,10 @@ echo "  frontend/        # ← 扩展前端页面"
 echo "  go.mod           # replace go-nx-admin => ./go-nx-admin/backend"
 echo "  Makefile"
 echo "  config.example.yaml"
+echo "  config.yaml"
 echo ""
 echo "快速开始:"
-echo "  cp config.example.yaml config.yaml"
+echo "  编辑 config.yaml 调整数据库等配置"
 echo "  cd frontend && npm install  # 安装前端依赖"
 echo "  make build-frontend         # 构建前端"
 echo "  ./${PROJECT_NAME} serve     # 启动后端"
