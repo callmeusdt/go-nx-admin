@@ -151,7 +151,7 @@ dev-backend:
 	go run ./cmd
 
 dev-backend-air:
-	cd \$(BACKEND_DIR) && air
+	air
 
 dev-frontend:
 	cd \$(FRONTEND_DIR) && npm run dev
@@ -166,6 +166,22 @@ upgrade:
 MAKE
 echo "  -> Makefile"
 
+# —— .air.toml ——
+cat > .air.toml << AIR
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/${PROJECT_NAME} ./cmd"
+  entrypoint = ["./tmp/${PROJECT_NAME}", "serve"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "data", "go-nx-admin/backend/tmp", "frontend"]
+  delay = 500
+  stop_on_error = true
+  kill_delay = "0.5s"
+AIR
+echo "  -> .air.toml"
+
 # —— .gitignore ——
 if [ -f ".gitignore" ]; then
     echo "跳过: .gitignore 已存在"
@@ -173,6 +189,9 @@ else
     cat > .gitignore << GITIGNORE
 # Binary
 ${PROJECT_NAME}
+
+# Build temp
+tmp/
 
 # Database
 data/nx.db
