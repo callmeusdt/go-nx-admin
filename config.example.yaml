@@ -1,0 +1,31 @@
+server:
+  host: 172.18.0.1
+  port: 19500
+
+database:
+  driver: sqlite                 # sqlite / mysql / postgres
+  dsn: data/nx.db
+  # mysql: user:pass@tcp(localhost:3306)/nxadmin?charset=utf8mb4&parseTime=True
+  # postgres: host=localhost user=postgres password=xxx dbname=nxadmin port=5432 sslmode=disable
+
+jwt:
+  secret: nx-admin-jwt-secret-2024
+
+cors:
+  origins: "*"
+
+login:
+  ip_whitelist_enabled: true
+  rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_minutes: 5
+    lock_minutes: 15
+
+upload:
+  dir: ./uploads
+  max_size: 10485760
+
+captcha:
+  enabled: true
+  padding: 5

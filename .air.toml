@@ -1,0 +1,11 @@
+root = "backend"
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ../nx-admin ./cmd"
+  bin = "../nx-admin"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "data"]
+  delay = 500
+  stop_on_error = true
+  kill_delay = "0.5s"

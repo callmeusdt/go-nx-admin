@@ -1,0 +1,44 @@
+# Binary
+nx-admin
+
+# Database
+data/nx.db
+backend/data/
+
+# Frontend build
+frontend/dist/*
+!frontend/dist/.gitkeep
+
+# Embed frontend dist (build output, except .gitkeep)
+backend/cmd/frontend/dist/*
+!backend/cmd/frontend/dist/.gitkeep
+
+# Dependencies
+frontend/node_modules/
+
+# Air hot reload
+tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (copy from config.example.yaml)
+config.yaml
+
+# Logs
+logs/
+backend/logs/
+
+# Uploads
+uploads/
+backend/uploads/
+
+# Backend temp
+backend/tmp/
