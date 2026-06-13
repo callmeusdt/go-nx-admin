@@ -230,6 +230,10 @@ cat > "$FRONTEND_DIR/package.json" << PKGJSON
     "@refinedev/core": "^4.48.0",
     "@refinedev/react-router-v6": "^4.5.0",
     "@refinedev/simple-rest": "^4.5.0",
+    "@tiptap/extension-image": "^3.26.1",
+    "@tiptap/extension-link": "^3.26.1",
+    "@tiptap/react": "^3.26.1",
+    "@tiptap/starter-kit": "^3.26.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "flatpickr": "^4.6.13",
@@ -256,12 +260,25 @@ echo "  -> frontend/package.json"
 
 # —— vite.config.ts ——
 cat > "$FRONTEND_DIR/vite.config.ts" << VITECFG
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+function resolveGoNxAdminModules(): Plugin {
+  return {
+    name: 'resolve-go-nx-admin-modules',
+    enforce: 'pre',
+    async resolveId(id, importer, _options) {
+      if (!importer || !importer.includes('/go-nx-admin/frontend/src/')) return null
+      if (id.startsWith('.') || id.startsWith('/') || id.startsWith('\0')) return null
+      const resolved = await this.resolve(id, path.resolve(__dirname, 'src/main.tsx'), { skipSelf: true })
+      return resolved ?? null
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), resolveGoNxAdminModules()],
   build: {
     rollupOptions: {
       output: {
