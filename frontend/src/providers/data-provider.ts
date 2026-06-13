@@ -1,66 +1,57 @@
-import simpleRestProvider from '@refinedev/simple-rest'
+import type { DataProvider } from '@refinedev/core'
 
 const API_URL = '/api/v1'
-
-const baseProvider = simpleRestProvider(API_URL)
 
 const authHeaders = () => {
   const token = localStorage.getItem('auth_token')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-const withAuthRedirect = async <T>(promise: Promise<T>): Promise<T> => {
-  try {
-    return await promise
-  } catch (error: any) {
-    if (error?.statusCode === 401 || error?.response?.status === 401) {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('username')
-      window.location.href = '/login'
-    }
-    throw error
+const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+    ...(init.headers ?? {}),
   }
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers })
+  if (res.status === 401) {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('username')
+    window.location.href = '/login'
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw { statusCode: res.status, message: data.message || res.statusText }
+  }
+  return res.json()
 }
 
-export const dataProvider = {
-  ...baseProvider,
-  getList: async ({ resource, pagination, filters, sorters, meta }) => {
-    const response = await withAuthRedirect(baseProvider.getList({
-      resource,
-      pagination,
-      filters,
-      sorters,
-      meta: { ...meta, headers: authHeaders() },
-    }))
-    return response
+export const dataProvider: DataProvider = {
+  getApiUrl: () => API_URL,
+  getList: async ({ resource }) => {
+    const json = await request<{ data: any[]; total?: number }>(`/${resource}`)
+    return { data: json.data ?? [], total: json.total ?? json.data?.length ?? 0 }
   },
-  getOne: async ({ resource, id, meta }) => {
-    return withAuthRedirect(baseProvider.getOne({
-      resource,
-      id,
-      meta: { ...meta, headers: authHeaders() },
-    }))
+  getOne: async ({ resource, id }) => {
+    const json = await request<{ data?: any }>(`/${resource}/${id}`)
+    return { data: json.data ?? json }
   },
-  create: async ({ resource, variables, meta }) => {
-    return withAuthRedirect(baseProvider.create({
-      resource,
-      variables,
-      meta: { ...meta, headers: authHeaders() },
-    }))
+  create: async ({ resource, variables }) => {
+    const json = await request<{ data?: any }>(`/${resource}`, {
+      method: 'POST',
+      body: JSON.stringify(variables),
+    })
+    return { data: json.data ?? json }
   },
-  update: async ({ resource, id, variables, meta }) => {
-    return withAuthRedirect(baseProvider.update({
-      resource,
-      id,
-      variables,
-      meta: { ...meta, headers: authHeaders() },
-    }))
+  update: async ({ resource, id, variables }) => {
+    const json = await request<{ data?: any }>(`/${resource}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(variables),
+    })
+    return { data: json.data ?? json }
   },
-  deleteOne: async ({ resource, id, meta }) => {
-    return withAuthRedirect(baseProvider.deleteOne({
-      resource,
-      id,
-      meta: { ...meta, headers: authHeaders() },
-    }))
+  deleteOne: async ({ resource, id }) => {
+    const json = await request<{ data?: any }>(`/${resource}/${id}`, { method: 'DELETE' })
+    return { data: json.data ?? json }
   },
 }
