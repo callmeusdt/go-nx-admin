@@ -120,6 +120,14 @@ else
     echo "  -> config.example.yaml"
 fi
 
+# —— config.yaml ——
+if [ -f "config.yaml" ]; then
+    echo "跳过: config.yaml 已存在"
+else
+    cp "$SCRIPT_DIR/config.example.yaml" config.yaml
+    echo "  -> config.yaml"
+fi
+
 # —— Makefile ——
 cat > Makefile << MAKE
 BACKEND_DIR = go-nx-admin/backend
@@ -151,7 +159,7 @@ dev-backend:
 	go run ./cmd
 
 dev-backend-air:
-	cd \$(BACKEND_DIR) && air
+	air
 
 dev-frontend:
 	cd \$(FRONTEND_DIR) && npm run dev
@@ -166,6 +174,22 @@ upgrade:
 MAKE
 echo "  -> Makefile"
 
+# —— .air.toml ——
+cat > .air.toml << AIR
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/${PROJECT_NAME} ./cmd"
+  entrypoint = ["./tmp/${PROJECT_NAME}", "serve"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "data", "go-nx-admin/backend/tmp", "frontend"]
+  delay = 500
+  stop_on_error = true
+  kill_delay = "0.5s"
+AIR
+echo "  -> .air.toml"
+
 # —— .gitignore ——
 if [ -f ".gitignore" ]; then
     echo "跳过: .gitignore 已存在"
@@ -173,6 +197,9 @@ else
     cat > .gitignore << GITIGNORE
 # Binary
 ${PROJECT_NAME}
+
+# Build temp
+tmp/
 
 # Database
 data/nx.db
@@ -472,9 +499,10 @@ echo "  frontend/        # ← 扩展前端页面"
 echo "  go.mod           # replace go-nx-admin => ./go-nx-admin/backend"
 echo "  Makefile"
 echo "  config.example.yaml"
+echo "  config.yaml"
 echo ""
 echo "快速开始:"
-echo "  cp config.example.yaml config.yaml"
+echo "  编辑 config.yaml 调整数据库等配置"
 echo "  cd frontend && npm install  # 安装前端依赖"
 echo "  make build-frontend         # 构建前端"
 echo "  ./${PROJECT_NAME} serve     # 启动后端"
