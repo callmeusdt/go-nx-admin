@@ -6,10 +6,8 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -129,15 +127,7 @@ func Run(opts Options) {
 	app.Static("/uploads", cfg.Upload.Dir)
 
 	if opts.EmbedFS != nil {
-		fileServer := http.FileServer(http.FS(opts.EmbedFS))
-		spaHandler := adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			path := strings.TrimPrefix(r.URL.Path, "/")
-			if _, err := opts.EmbedFS.Open(path); err != nil {
-				r.URL.Path = "/"
-			}
-			fileServer.ServeHTTP(w, r)
-		})
-		app.Use("/*", spaHandler)
+		app.Use("/*", adaptor.HTTPHandler(StaticHandler(opts.EmbedFS)))
 	}
 
 	quit := make(chan os.Signal, 1)
