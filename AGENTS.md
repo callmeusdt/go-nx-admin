@@ -41,6 +41,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 显式runtime可选`Config.Session.Cookie=true`，需单一HTTPS `Session.Origin`等于CORS origins；前端`createApp({sessionMode:'cookie',disabledResources:['media']})`配套。旧Run/serve保留Bearer并拒绝cookie配置，避免隐式默认账号/公开uploads进入严格模式。
 - Cookie模式使用Secure/HttpOnly会话与CSRF，完整会话8h，待MFA会话5min且只允许精确verify；未注册MFA只开放注册必需端点。业务变更要求5分钟内密码+TOTP重认证，锁屏unlock不延长该授权。仅显式信任loopback代理时读X-BIM-Client-IP，代理必须覆盖该头。
 - 严格模式回归：`go test -race ./...`和`go vet ./...`；`NX_TEST_DATABASE_DSN`启用隔离schema Cookie/MFA PostgreSQL测试，`NX_TEST_POSTGRES_DSN`启用只读启动测试。浏览器测试专用`NX_BROWSER_QA_ADDR`仅用于本地隔离test进程，不是运行配置。
+- `app.BootstrapAdmin(db,username,password)`仅支持已显式迁移且管理种子表为空的PostgreSQL schema，事务锁保证并发仅一次；密码由调用方传入（12～72字节），不生成默认密码，重复执行返回`ErrAdminAlreadyInitialized`且不修改已有账号。初始化账号尚未MFA注册，须经严格模式注册后才能执行业务。
 
 - JWT 有效期 24h；`JWTAuth` 校验 token 对应的 `admin_online_users` 会话，MFA 验证路径不做在线会话检查。修改认证前先核对 middleware 和路由例外，不以菜单可见性代替认证。
 - Casbin 模型为 `g(r.sub, p.sub) && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)`；Admin 种子为 `admin, .*, .*`。原有 login/verify-password 等路由例外按注册实现维护，不擅自扩大放行范围。
