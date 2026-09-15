@@ -1,5 +1,6 @@
 import React from 'react'
 import { api } from '../../lib/api'
+import { sessionFetch } from '../../lib/session'
 import { Media } from '../../types'
 
 interface UploadProps {
@@ -25,10 +26,8 @@ export const Upload: React.FC<UploadProps> = ({ accept, maxSize, onSuccess, onEr
     try {
       const form = new FormData()
       form.append('file', file)
-      const token = localStorage.getItem('auth_token')
-      const res = await fetch('/api/v1/media/upload', {
+      const res = await sessionFetch('/api/v1/media/upload', {
         method: 'POST',
-        headers: token ? { Authorization: 'Bearer ' + token } : {},
         body: form,
       })
       if (!res.ok) {

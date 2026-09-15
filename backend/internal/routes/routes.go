@@ -19,6 +19,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Post("/auth/login", handlers.Login(db))
 	api.Post("/auth/logout", handlers.Logout(db))
 	api.Post("/auth/verify-password", handlers.VerifyPassword(db))
+	api.Post("/auth/unlock", handlers.Unlock(db))
 	api.Get("/auth/me", handlers.Me(db))
 	api.Put("/auth/profile", handlers.UpdateProfile(db))
 	api.Get("/auth/menus", handlers.MyMenus(db))

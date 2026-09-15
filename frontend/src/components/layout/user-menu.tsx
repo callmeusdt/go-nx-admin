@@ -15,6 +15,7 @@ import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { useLockScreen } from '../../contexts/lock-screen-context'
 import { api } from '../../lib/api'
+import { sessionFetch, clearSession } from '../../lib/session'
 import { IPWhitelist } from '../../types'
 
 export const UserMenu: React.FC = () => {
@@ -140,15 +141,9 @@ export const UserMenu: React.FC = () => {
   }
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => undefined)
-    }
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('username')
+    const response = await sessionFetch('/api/v1/auth/logout', { method: 'POST' })
+    if (!response.ok && response.status !== 401) return
+    clearSession()
     navigate('/login', { replace: true })
   }
 

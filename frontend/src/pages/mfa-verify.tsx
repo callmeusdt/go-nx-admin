@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { sessionFetch, rememberLogin, hasPendingMFA, usesCookieSession } from '../lib/session'
 
 export const MFAVerifyPage: React.FC = () => {
   const [code, setCode] = useState('')
@@ -10,7 +11,7 @@ export const MFAVerifyPage: React.FC = () => {
   const username = localStorage.getItem('mfa_username')
 
   useEffect(() => {
-    if (!mfaToken) {
+    if (!hasPendingMFA() && !usesCookieSession()) {
       navigate('/login', { replace: true })
     }
   }, [mfaToken, navigate])
@@ -21,7 +22,7 @@ export const MFAVerifyPage: React.FC = () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/mfa/verify', {
+      const res = await sessionFetch('/api/v1/auth/mfa/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -33,8 +34,7 @@ export const MFAVerifyPage: React.FC = () => {
       if (res.ok) {
         localStorage.removeItem('mfa_token')
         localStorage.removeItem('mfa_username')
-        localStorage.setItem('auth_token', data.token)
-        localStorage.setItem('username', data.user.username)
+        rememberLogin(data)
         navigate('/dashboard', { replace: true })
       } else {
         setError(data.message || '验证失败')
@@ -66,7 +66,7 @@ export const MFAVerifyPage: React.FC = () => {
               value={code}
               onChange={e => setCode(e.target.value)}
               placeholder="6 位验证码 或 恢复码"
-              maxLength={6}
+              maxLength={64}
               autoComplete="one-time-code"
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-center text-lg tracking-wider focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
             />

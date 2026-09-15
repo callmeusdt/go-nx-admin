@@ -86,7 +86,12 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 		path := c.Path()
 		method := c.Method()
 
-		if !strings.HasPrefix(path, "/api/") ||
+		if CookieMode() {
+			switch method + " " + path {
+			case "POST /api/v1/auth/login", "GET /api/v1/auth/captcha", "POST /api/v1/auth/logout", "GET /api/v1/auth/me", "POST /api/v1/auth/verify-password", "POST /api/v1/auth/unlock", "POST /api/v1/auth/mfa/verify", "POST /api/v1/auth/mfa/setup", "POST /api/v1/auth/mfa/enable", "POST /api/v1/auth/mfa/disable", "POST /api/v1/auth/mfa/recovery-codes":
+				return c.Next()
+			}
+		} else if !strings.HasPrefix(path, "/api/") ||
 			strings.HasSuffix(path, "/login") ||
 			strings.HasSuffix(path, "/captcha") ||
 			strings.HasSuffix(path, "/verify-password") ||
@@ -122,18 +127,20 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 		if len(parts) >= 3 {
 			module = parts[2]
 		}
+		// Fiber strings may alias pooled request buffers. Own every string before
+		// the handler returns so the asynchronous writer cannot observe reuse.
+		record := models.AuditLog{
+			Operator: strings.Clone(username),
+			Title:    method + " " + path,
+			Module:   strings.Clone(module),
+			Path:     strings.Clone(path),
+			Method:   strings.Clone(method),
+			IP:       strings.Clone(ip),
+			Status:   status,
+			Duration: time.Since(start).Microseconds(),
+			Error:    strings.Clone(errMsg),
+		}
 		go func() {
-			record := models.AuditLog{
-				Operator: username,
-				Title:    method + " " + path,
-				Module:   module,
-				Path:     path,
-				Method:   method,
-				IP:       ip,
-				Status:   status,
-				Duration: time.Since(start).Microseconds(),
-				Error:    errMsg,
-			}
 			if err := db.Create(&record).Error; err != nil {
 				log.Printf("audit log error: %v", err)
 			}

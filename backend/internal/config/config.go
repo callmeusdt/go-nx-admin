@@ -16,6 +16,14 @@ type Config struct {
 	Login    LoginConfig    `yaml:"login"`
 	Upload   UploadConfig   `yaml:"upload"`
 	Captcha  CaptchaConfig  `yaml:"captcha"`
+	Session  SessionConfig  `yaml:"session"`
+}
+
+// Cookie is opt-in; existing deployments retain their Bearer transport.
+type SessionConfig struct {
+	Cookie             bool   `yaml:"cookie"`
+	Origin             string `yaml:"origin"`
+	TrustLoopbackProxy bool   `yaml:"trust_loopback_proxy"`
 }
 
 type ServerConfig struct {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Image, File, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
+import { sessionFetch } from '../../lib/session'
 import { Media } from '../../types'
 
 export const MediaPage: React.FC = () => {
@@ -36,10 +37,8 @@ export const MediaPage: React.FC = () => {
     if (!file) return
     const form = new FormData()
     form.append('file', file)
-    const token = localStorage.getItem('auth_token')
-    await fetch('/api/v1/media/upload', {
+    await sessionFetch('/api/v1/media/upload', {
       method: 'POST',
-      headers: token ? { Authorization: 'Bearer ' + token } : {},
       body: form,
     })
     e.target.value = ''

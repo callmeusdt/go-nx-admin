@@ -82,6 +82,12 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	if opts.PublicUploads && (opts.DisableMedia || opts.Config.Upload.Dir == "") {
 		return nil, errors.New("app: public uploads require media and an explicit directory")
 	}
+	if opts.Config.Session.Cookie {
+		u, err := url.Parse(opts.Config.Session.Origin)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || opts.Config.CORS.Origins != opts.Config.Session.Origin {
+			return nil, errors.New("app: cookie sessions require one exact HTTPS origin")
+		}
+	}
 	runtimeGuard.Lock()
 	defer runtimeGuard.Unlock()
 	if runtimeGuard.active {
@@ -119,7 +125,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	models.ExtraPermissionDefs = opts.Extensions.ExtraPermissions
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	r.App.Use(fiberRecover.New())
-	r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins}))
+	r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins, AllowCredentials: opts.Config.Session.Cookie, AllowHeaders: "Content-Type,Authorization,X-CSRF-Token"}))
 	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "${status} ${method} ${path}\n"}))
 	r.App.Get("/health", func(c *fiber.Ctx) error {
 		db, err := opts.DB.DB()
@@ -179,6 +185,9 @@ func MigrateSchema(db *gorm.DB, extraModels ...interface{}) error {
 		return errors.New("app: database is required")
 	}
 	if err := models.AutoMigrate(db, extraModels...); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&models.BrowserSession{}); err != nil {
 		return err
 	}
 	// The policy table belongs to the schema, but policy seeds remain explicit.

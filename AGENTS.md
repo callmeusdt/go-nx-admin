@@ -6,7 +6,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 
 - 二开后端只能 import 公开的 `go-nx-admin/app`；需跨 module 使用的包不得放 `backend/internal/`。
 - `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。
-- 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录；这不等于cookie/MFA严格模式已实现。
+- 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录。
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
 - 前端通过 `frontend/src/core.tsx` 的 `createApp(opts)` 注入 `extraResources`、`extraRoutes`、`extraRouteLabels`，业务页面留在二开项目自己的 `frontend/src/pages/`。
@@ -37,6 +37,10 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 菜单授权只控制侧栏可见性，不能替代接口鉴权。权限弹窗按组展示 checkbox，组全选与下级联动。
 
 ## 认证与安全边界
+
+- 显式runtime可选`Config.Session.Cookie=true`，需单一HTTPS `Session.Origin`等于CORS origins；前端`createApp({sessionMode:'cookie',disabledResources:['media']})`配套。旧Run/serve保留Bearer并拒绝cookie配置，避免隐式默认账号/公开uploads进入严格模式。
+- Cookie模式使用Secure/HttpOnly会话与CSRF，完整会话8h，待MFA会话5min且只允许精确verify；未注册MFA只开放注册必需端点。业务变更要求5分钟内密码+TOTP重认证，锁屏unlock不延长该授权。仅显式信任loopback代理时读X-BIM-Client-IP，代理必须覆盖该头。
+- 严格模式回归：`go test -race ./...`和`go vet ./...`；`NX_TEST_DATABASE_DSN`启用隔离schema Cookie/MFA PostgreSQL测试，`NX_TEST_POSTGRES_DSN`启用只读启动测试。浏览器测试专用`NX_BROWSER_QA_ADDR`仅用于本地隔离test进程，不是运行配置。
 
 - JWT 有效期 24h；`JWTAuth` 校验 token 对应的 `admin_online_users` 会话，MFA 验证路径不做在线会话检查。修改认证前先核对 middleware 和路由例外，不以菜单可见性代替认证。
 - Casbin 模型为 `g(r.sub, p.sub) && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)`；Admin 种子为 `admin, .*, .*`。原有 login/verify-password 等路由例外按注册实现维护，不擅自扩大放行范围。

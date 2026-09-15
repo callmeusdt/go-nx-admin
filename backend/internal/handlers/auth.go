@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/hex"
@@ -109,6 +110,9 @@ func Login(db *gorm.DB) fiber.Handler {
 			recordLoginLog(db, req.Username, c, "fail", reason, start)
 			return c.Status(403).JSON(fiber.Map{"message": reason})
 		}
+		if middleware.CookieMode() {
+			return browserLogin(c, db, user)
+		}
 
 		token, err := middleware.GenerateToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
 		if err != nil {
@@ -122,9 +126,9 @@ func Login(db *gorm.DB) fiber.Handler {
 				"mfa_required": true,
 				"mfa_token":    token,
 				"user": fiber.Map{
-					"id":        user.ID,
-					"username":  user.Username,
-					"mfa":       true,
+					"id":       user.ID,
+					"username": user.Username,
+					"mfa":      true,
 				},
 			})
 		}
@@ -154,6 +158,9 @@ func Login(db *gorm.DB) fiber.Handler {
 
 func Logout(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserLogout(c, db)
+		}
 		token, _ := c.Locals("token").(string)
 		if token != "" {
 			db.Delete(&models.OnlineUser{}, "token = ?", token)
@@ -164,6 +171,9 @@ func Logout(db *gorm.DB) fiber.Handler {
 
 func MFASetup(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserEnrollment(c, db, false)
+		}
 		userID := c.Locals("user_id").(uint)
 		var user models.User
 		if err := db.First(&user, userID).Error; err != nil {
@@ -186,6 +196,9 @@ func MFASetup(db *gorm.DB) fiber.Handler {
 
 func MFAEnable(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserEnrollment(c, db, true)
+		}
 		userID := c.Locals("user_id").(uint)
 		var req struct {
 			Code string `json:"code"`
@@ -220,6 +233,9 @@ func MFAEnable(db *gorm.DB) fiber.Handler {
 
 func MFADisable(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return c.Status(403).JSON(fiber.Map{"code": "MFA_REQUIRED"})
+		}
 		userID := c.Locals("user_id").(uint)
 		var req struct {
 			Password string `json:"password"`
@@ -253,6 +269,9 @@ func MFADisable(db *gorm.DB) fiber.Handler {
 
 func MFARecoveryCodes(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserRecoveryCodes(c, db)
+		}
 		userID := c.Locals("user_id").(uint)
 		var user models.User
 		if err := db.First(&user, userID).Error; err != nil {
@@ -277,6 +296,9 @@ func MFARecoveryCodes(db *gorm.DB) fiber.Handler {
 
 func MFAVerify(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserMFAVerify(c, db)
+		}
 		start := time.Now()
 		var req struct {
 			MfaToken     string `json:"mfa_token"`
@@ -311,14 +333,14 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 					hashedCodes := make([]string, 0)
 					for _, sc := range strings.Split(user.MFARecoveryCodes, ",") {
 						if sc != codeHex {
-				hashedCodes = append(hashedCodes, sc)
+							hashedCodes = append(hashedCodes, sc)
+						}
+					}
+					user.MFARecoveryCodes = strings.Join(hashedCodes, ",")
+					db.Save(&user)
+					break
+				}
 			}
-		}
-		user.MFARecoveryCodes = strings.Join(hashedCodes, ",")
-		db.Save(&user)
-		break
-	}
-}
 		} else {
 			verified = totp.Validate(req.Code, user.MFASecret)
 		}
@@ -361,9 +383,9 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 func generateRecoveryCodes() []string {
 	codes := make([]string, 8)
 	for i := 0; i < 8; i++ {
-		b := make([]byte, 6)
-		for j := range b {
-			b[j] = byte(time.Now().UnixNano()>>(j*2)) ^ byte(i*17+j)
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			panic("recovery entropy unavailable")
 		}
 		codes[i] = strings.ToUpper(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
 	}
@@ -395,12 +417,12 @@ func recordLoginLog(db *gorm.DB, username string, c *fiber.Ctx, status string, m
 	ua := c.Get("User-Agent")
 	duration := time.Since(start).Microseconds()
 	go db.Create(&models.LoginLog{
-		Username:  username,
-		IP:        ip,
+		Username:  strings.Clone(username),
+		IP:        strings.Clone(ip),
 		Geo:       resolveIPGeo(ip),
-		UserAgent: ua,
-		Status:    status,
-		Message:   message,
+		UserAgent: strings.Clone(ua),
+		Status:    strings.Clone(status),
+		Message:   strings.Clone(message),
 		Duration:  duration,
 	})
 }
@@ -410,6 +432,9 @@ func MyIP(c *fiber.Ctx) error {
 }
 
 func clientIP(c *fiber.Ctx) string {
+	if middleware.CookieMode() {
+		return middleware.BrowserIP(c)
+	}
 	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP"} {
 		value := strings.TrimSpace(c.Get(header))
 		if value == "" {
@@ -497,6 +522,22 @@ func UpdateProfile(db *gorm.DB) fiber.Handler {
 
 func VerifyPassword(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			return browserReauthenticate(c, db)
+		}
+		return Unlock(db)(c)
+	}
+}
+
+// Unlock verifies only the local screen lock; it never grants reauthentication.
+func Unlock(db *gorm.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			key := "unlock:" + c.Locals("token").(string)
+			if allowed, _ := middleware.CheckRateLimit(key); !allowed {
+				return c.SendStatus(429)
+			}
+		}
 		var req struct {
 			Password string `json:"password"`
 		}
@@ -511,6 +552,9 @@ func VerifyPassword(db *gorm.DB) fiber.Handler {
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+			if middleware.CookieMode() {
+				middleware.RecordFailedAttempt("unlock:" + c.Locals("token").(string))
+			}
 			return c.Status(400).JSON(fiber.Map{"message": "password incorrect"})
 		}
 
@@ -528,7 +572,16 @@ func ClearUserMFA(db *gorm.DB) fiber.Handler {
 		user.MFAEnabled = false
 		user.MFASecret = ""
 		user.MFARecoveryCodes = ""
-		if err := db.Save(&user).Error; err != nil {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&user).Error; err != nil {
+				return err
+			}
+			if middleware.CookieMode() {
+				return tx.Where("user_id = ?", user.ID).Delete(&models.BrowserSession{}).Error
+			}
+			return nil
+		})
+		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
 		}
 		return c.JSON(fiber.Map{"message": "ok"})

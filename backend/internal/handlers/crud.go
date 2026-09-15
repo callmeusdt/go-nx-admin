@@ -5,10 +5,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gofiber/fiber/v2"
 	"go-nx-admin/internal/config"
+	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -22,7 +24,15 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		}
 
 		var onlineUsers []models.OnlineUser
-		if err := db.Find(&onlineUsers).Error; err != nil {
+		if middleware.CookieMode() {
+			var sessions []models.BrowserSession
+			if err := db.Where("purpose = ? AND expires_at > ?", "full", time.Now()).Order("created_at desc").Find(&sessions).Error; err != nil {
+				return err
+			}
+			for _, session := range sessions {
+				onlineUsers = append(onlineUsers, models.OnlineUser{ID: session.ID, UserID: session.UserID, Token: session.TokenHash, IP: session.IP, UserAgent: session.UserAgent, LoginAt: session.CreatedAt, UpdatedAt: session.CreatedAt})
+			}
+		} else if err := db.Find(&onlineUsers).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
 		}
 		currentToken, _ := c.Locals("token").(string)
@@ -106,7 +116,16 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 		if req.Status != nil {
 			updates["status"] = *req.Status
 		}
-		if err := db.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+				return err
+			}
+			if middleware.CookieMode() {
+				return tx.Where("user_id = ?", id).Delete(&models.BrowserSession{}).Error
+			}
+			return nil
+		})
+		if err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -408,6 +427,19 @@ func pagination(c *fiber.Ctx) (int, int, int) {
 
 func ListOnlineUsers(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if middleware.CookieMode() {
+			page, size, offset := pagination(c)
+			query := db.Table("admin_browser_sessions s").Joins("JOIN admin_users u ON u.id=s.user_id").Joins("JOIN admin_roles r ON r.id=u.role_id").Where("s.purpose = ? AND s.expires_at > ?", "full", time.Now())
+			var total int64
+			if err := query.Count(&total).Error; err != nil {
+				return err
+			}
+			var items []map[string]any
+			if err := query.Select("s.id,s.user_id,u.username,r.slug AS role,s.ip,s.user_agent,s.created_at AS login_at,s.created_at AS updated_at").Order("s.created_at desc,s.id desc").Limit(size).Offset(offset).Find(&items).Error; err != nil {
+				return err
+			}
+			return c.JSON(fiber.Map{"data": items, "total": total, "page": page, "page_size": size})
+		}
 		var users []models.OnlineUser
 		db.Order("updated_at desc").Find(&users)
 		return c.JSON(fiber.Map{"data": users})
@@ -418,6 +450,16 @@ func KickOnlineUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		currentToken, _ := c.Locals("token").(string)
+		if middleware.CookieMode() {
+			session := c.Locals("browser_session").(models.BrowserSession)
+			if session.ID == uint(id) {
+				return c.Status(400).JSON(fiber.Map{"code": "CURRENT_SESSION"})
+			}
+			if err := db.Delete(&models.BrowserSession{}, id).Error; err != nil {
+				return err
+			}
+			return c.JSON(fiber.Map{"message": "ok"})
+		}
 		var online models.OnlineUser
 		if err := db.First(&online, id).Error; err != nil {
 			return c.Status(404).JSON(fiber.Map{"message": "session not found"})

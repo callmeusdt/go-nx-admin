@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
+import { sessionFetch, usesCookieSession } from '../lib/session'
 
 interface LockScreenContextType {
   isLocked: boolean
@@ -26,12 +27,10 @@ export const LockScreenProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const unlock = useCallback(async (password: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('auth_token')
-      const res = await fetch('/api/v1/auth/verify-password', {
+      const res = await sessionFetch(usesCookieSession() ? '/api/v1/auth/unlock' : '/api/v1/auth/verify-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ password }),
       })

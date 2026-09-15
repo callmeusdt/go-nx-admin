@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SlideCaptchaModal } from '../components/ui/slide-captcha-modal'
 import { useI18n } from '../contexts/i18n-context'
+import { sessionFetch, rememberLogin } from '../lib/session'
 
 interface CaptchaInfo {
   id: string
@@ -65,7 +66,7 @@ export const LoginPage: React.FC = () => {
 
   const fetchCaptcha = async () => {
     try {
-      const res = await fetch('/api/v1/auth/captcha')
+      const res = await sessionFetch('/api/v1/auth/captcha')
       const data = await res.json()
       if (data.captcha_enabled) {
         setCaptchaInfo({
@@ -90,7 +91,7 @@ export const LoginPage: React.FC = () => {
       const body: any = { username, password, fingerprint: fp.current }
       if (captchaId) body.captcha_id = captchaId
       if (slideX !== undefined) body.slide_x = slideX
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await sessionFetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -120,13 +121,10 @@ export const LoginPage: React.FC = () => {
       setCaptchaError('')
 
       if (res.ok) {
+        rememberLogin(data)
         if (data.mfa_required) {
-          localStorage.setItem('mfa_token', data.mfa_token)
-          localStorage.setItem('mfa_username', data.user.username)
           navigate('/mfa-verify', { replace: true })
         } else {
-          localStorage.setItem('auth_token', data.token)
-          localStorage.setItem('username', data.user.username)
           navigate('/dashboard', { replace: true })
         }
         return

@@ -1,8 +1,11 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import type { ResourceProps } from '@refinedev/core'
 import { Refine } from '@refinedev/core'
 import routerBindings from '@refinedev/react-router-v6'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { configureSession, usesCookieSession, sessionFetch } from './lib/session'
+import { EnrollmentPage } from './pages/enrollment'
+import { Reauthenticate } from './components/reauthenticate'
 import { authProvider } from './providers/auth-provider'
 import { dataProvider } from './providers/data-provider'
 import { TabsProvider } from './contexts/tabs-context'
@@ -34,12 +37,31 @@ const BUILTIN_RESOURCES: ResourceProps[] = [
 ]
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation()
+  const [state, setState] = useState<'loading' | 'ready' | 'login' | 'enroll'>('loading')
+  useEffect(() => {
+    if (!usesCookieSession()) return
+    let active = true
+    setState('loading')
+    void sessionFetch('/api/v1/auth/me').then(async response => {
+      if (!response.ok) { if(active)setState('login'); return }
+      const user = await response.json()
+      if(active)setState(user.mfa_enabled ? 'ready' : 'enroll')
+    }).catch(() => { if(active)setState('login') })
+    return () => { active = false }
+  }, [location.pathname])
+  if (usesCookieSession()) {
+    if(state==='loading')return <div role="status" aria-label="Loading" />
+    if(state==='login')return <Navigate to="/login" replace />
+    if(state==='enroll')return <EnrollmentPage />
+    return <>{children}</>
+  }
   const token = localStorage.getItem('auth_token')
   if (!token) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
-const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>): React.ReactElement[] => {
+const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = []): React.ReactElement[] => {
   const labels = extraLabels ?? {}
   const builtin = [
     <Route key="/login" path="/login" element={<LoginPage />} />,
@@ -61,15 +83,13 @@ const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<st
       <Route path="/audit-logs" element={<AuditLogsPage />} />
       <Route path="/apis" element={<ApisPage />} />
       <Route path="/login-logs" element={<LoginLogsPage />} />
-      <Route path="/media" element={<MediaPage />} />
+      {!disabled.includes('media') && <Route path="/media" element={<MediaPage />} />}
       <Route path="/system-config" element={<SystemConfigPage />} />
+      {extraRoutes}
     </Route>,
     <Route key="/" path="/" element={<Navigate to="/dashboard" replace />} />,
     <Route key="*" path="*" element={<Navigate to="/dashboard" replace />} />,
   ]
-  if (extraRoutes && extraRoutes.length > 0) {
-    builtin.push(...extraRoutes)
-  }
   return builtin
 }
 
@@ -77,14 +97,18 @@ export interface CreateAppOptions {
   extraResources?: ResourceProps[]
   extraRoutes?: React.ReactElement[]
   extraRouteLabels?: Record<string, string>
+  sessionMode?: 'bearer' | 'cookie'
+  disabledResources?: string[]
 }
 
 export function createApp(opts?: CreateAppOptions): React.FC {
+  configureSession(opts?.sessionMode)
   return function App() {
-    const resources = [...BUILTIN_RESOURCES, ...(opts?.extraResources ?? [])]
+    const resources = [...BUILTIN_RESOURCES.filter(item => !opts?.disabledResources?.includes(item.name)), ...(opts?.extraResources ?? [])]
     return (
       <BrowserRouter>
         <I18nProvider>
+          <Reauthenticate />
           <LockScreenProvider>
             <TabsProvider>
               <Refine
@@ -99,7 +123,7 @@ export function createApp(opts?: CreateAppOptions): React.FC {
                 }}
               >
                 <Routes>
-                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels)}
+                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources)}
                 </Routes>
               </Refine>
             </TabsProvider>

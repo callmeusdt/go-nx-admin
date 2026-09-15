@@ -10,6 +10,9 @@ import (
 
 func JWTAuth(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if CookieMode() {
+			return BrowserAuth(db)(c)
+		}
 		if strings.HasSuffix(c.Path(), "/login") || strings.HasSuffix(c.Path(), "/captcha") {
 			return c.Next()
 		}

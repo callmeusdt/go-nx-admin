@@ -1,40 +1,29 @@
 import type { AuthProvider } from '@refinedev/core'
+import { sessionFetch, rememberLogin, clearSession } from '../lib/session'
 
 export const authProvider: AuthProvider = {
   login: async ({ username, password }) => {
-    const res = await fetch('/api/v1/auth/login', {
+    const res = await sessionFetch('/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
     if (!res.ok) {
       const data = await res.json()
-      return { success: false, error: { message: data.message || 'Login failed' } }
+      return { success: false, error: new Error(data.message || 'Login failed') }
     }
     const data = await res.json()
-    localStorage.setItem('auth_token', data.token)
-    localStorage.setItem('username', data.user.username)
-    return { success: true, redirectTo: '/dashboard' }
+    rememberLogin(data)
+    return { success: true, redirectTo: data.mfa_required ? '/mfa-verify' : '/dashboard' }
   },
   logout: async () => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => undefined)
-    }
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('username')
+    const result = await sessionFetch('/api/v1/auth/logout', { method: 'POST' })
+    if (!result.ok && result.status !== 401) return { success: false, error: new Error('Logout failed') }
+    clearSession()
     return { success: true, redirectTo: '/login' }
   },
   check: async () => {
-    const token = localStorage.getItem('auth_token')
-    if (!token) return { authenticated: false, redirectTo: '/login' }
-
-    const res = await fetch('/api/v1/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await sessionFetch('/api/v1/auth/me')
     if (res.ok) return { authenticated: true }
 
     localStorage.removeItem('auth_token')

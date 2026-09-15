@@ -41,6 +41,9 @@ type PermissionDef = models.PermissionDef
 
 func Run(opts Options) {
 	cfg := config.Load()
+	if cfg.Session.Cookie {
+		log.Fatal("cookie sessions require app.NewRuntime with explicit migration and bootstrap")
+	}
 
 	dirs := []string{"data", "logs", cfg.Upload.Dir}
 	for _, d := range dirs {

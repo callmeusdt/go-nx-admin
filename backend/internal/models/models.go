@@ -19,7 +19,7 @@ type User struct {
 	Role             Role      `gorm:"foreignKey:RoleID" json:"role"`
 	MFAEnabled       bool      `gorm:"default:false" json:"mfa_enabled"`
 	MFASecret        string    `gorm:"size:64" json:"-"`
-	MFARecoveryCodes string    `gorm:"size:512" json:"-"`
+	MFARecoveryCodes string    `gorm:"size:1024" json:"-"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }

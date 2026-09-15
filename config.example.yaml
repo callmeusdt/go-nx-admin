@@ -14,6 +14,14 @@ jwt:
 cors:
   origins: "*"
 
+# Strict cookie/MFA mode is only supported by app.NewRuntime, with explicit
+# migration/bootstrap and one HTTPS session.origin equal to cors.origins.
+# Legacy serve/Run keeps Bearer mode and rejects cookie: true before any writes.
+session:
+  cookie: false
+  origin: ""
+  trust_loopback_proxy: false
+
 login:
   ip_whitelist_enabled: true
   rate_limit:
