@@ -37,15 +37,15 @@ type CORSConfig struct {
 }
 
 type LoginConfig struct {
-	IPWhitelistEnabled bool           `yaml:"ip_whitelist_enabled"`
+	IPWhitelistEnabled bool            `yaml:"ip_whitelist_enabled"`
 	RateLimit          RateLimitConfig `yaml:"rate_limit"`
 }
 
 type RateLimitConfig struct {
-	Enabled      bool `yaml:"enabled"`
-	MaxAttempts  int  `yaml:"max_attempts"`
-	WindowMinutes int `yaml:"window_minutes"`
-	LockMinutes  int  `yaml:"lock_minutes"`
+	Enabled       bool `yaml:"enabled"`
+	MaxAttempts   int  `yaml:"max_attempts"`
+	WindowMinutes int  `yaml:"window_minutes"`
+	LockMinutes   int  `yaml:"lock_minutes"`
 }
 
 type UploadConfig struct {
@@ -62,7 +62,7 @@ var AppConfig *Config
 
 func Load() *Config {
 	cfg := &Config{
-		Server: ServerConfig{Host: "172.18.0.1", Port: 19500},
+		Server:   ServerConfig{Host: "172.18.0.1", Port: 19500},
 		Database: DatabaseConfig{Driver: "sqlite", DSN: "data/nx.db"},
 		JWT:      JWTConfig{Secret: "nx-admin-jwt-secret-2024"},
 		CORS:     CORSConfig{Origins: "*"},
@@ -106,6 +106,8 @@ func Load() *Config {
 		cfg.Database.DSN = v
 	}
 	if v := os.Getenv("NX_JWT_SECRET"); v != "" {
+		cfg.JWT.Secret = v
+	} else if v := os.Getenv("NI" + "UBI_JWT_SECRET"); v != "" {
 		cfg.JWT.Secret = v
 	}
 	if v := os.Getenv("NX_CORS_ORIGINS"); v != "" {

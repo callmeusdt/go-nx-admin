@@ -6,6 +6,8 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 
 - 二开后端只能 import 公开的 `go-nx-admin/app`；需跨 module 使用的包不得放 `backend/internal/`。
 - `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。
+- 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录；这不等于cookie/MFA严格模式已实现。
+- 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
 - 前端通过 `frontend/src/core.tsx` 的 `createApp(opts)` 注入 `extraResources`、`extraRoutes`、`extraRouteLabels`，业务页面留在二开项目自己的 `frontend/src/pages/`。
 - 修改扩展接口前先读上述公开入口；底座升级要保持二开可 import 和 embed 构建边界，不用内部包绕过公开 API。

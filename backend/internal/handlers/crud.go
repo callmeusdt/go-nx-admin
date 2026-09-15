@@ -8,6 +8,7 @@ import (
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gofiber/fiber/v2"
+	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -28,28 +29,28 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		onlineByUserID := make(map[uint][]fiber.Map, len(onlineUsers))
 		for _, item := range onlineUsers {
 			onlineByUserID[item.UserID] = append(onlineByUserID[item.UserID], fiber.Map{
-				"id":              item.ID,
-				"ip":              item.IP,
-				"user_agent":      item.UserAgent,
-				"login_at":        item.LoginAt,
-				"updated_at":      item.UpdatedAt,
-				"is_current":      currentToken != "" && item.Token == currentToken,
-				"can_kick":        currentToken != "" && item.Token != currentToken,
+				"id":         item.ID,
+				"ip":         item.IP,
+				"user_agent": item.UserAgent,
+				"login_at":   item.LoginAt,
+				"updated_at": item.UpdatedAt,
+				"is_current": currentToken != "" && item.Token == currentToken,
+				"can_kick":   currentToken != "" && item.Token != currentToken,
 			})
 		}
 
 		data := make([]fiber.Map, 0, len(users))
 		for _, user := range users {
 			item := fiber.Map{
-				"id":         user.ID,
-				"username":   user.Username,
-				"status":     user.Status,
-				"role_id":    user.RoleID,
-				"role":       user.Role,
+				"id":          user.ID,
+				"username":    user.Username,
+				"status":      user.Status,
+				"role_id":     user.RoleID,
+				"role":        user.Role,
 				"mfa_enabled": user.MFAEnabled,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-				"is_online":  false,
+				"created_at":  user.CreatedAt,
+				"updated_at":  user.UpdatedAt,
+				"is_online":   false,
 			}
 			if sessions, ok := onlineByUserID[user.ID]; ok && len(sessions) > 0 {
 				latest := sessions[0]
@@ -493,6 +494,9 @@ func SaveRoleMenus(db *gorm.DB) fiber.Handler {
 }
 
 func isLoginIPWhitelistEnabled() bool {
+	if config.AppConfig != nil {
+		return config.AppConfig.Login.IPWhitelistEnabled
+	}
 	return os.Getenv("NX_LOGIN_IP_WHITELIST_ENABLED") != "false"
 }
 
@@ -502,7 +506,7 @@ func CheckLoginIPWhitelist(db *gorm.DB, userID uint, ip string) (bool, string) {
 	}
 	var rules []models.UserIPWhitelist
 	if err := db.Where("user_id = ? AND enabled = ?", userID, true).Find(&rules).Error; err != nil {
-		return true, ""
+		return false, "IP rules unavailable"
 	}
 	if len(rules) == 0 {
 		return true, ""

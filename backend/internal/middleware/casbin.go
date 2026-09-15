@@ -65,6 +65,21 @@ func InitCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
 	return e, nil
 }
 
+// LoadCasbin loads existing policies without schema changes or seed writes.
+func LoadCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
+	m, err := model.NewModelFromString(rbacModel)
+	if err != nil {
+		return nil, err
+	}
+	connection := db.Session(&gorm.Session{})
+	gormadapter.TurnOffAutoMigrate(connection)
+	a, err := gormadapter.NewAdapterByDBUseTableName(connection, "admin", "casbin_rule")
+	if err != nil {
+		return nil, err
+	}
+	return casbin.NewEnforcer(m, a)
+}
+
 func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()

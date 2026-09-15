@@ -4,10 +4,15 @@ import (
 	"os"
 	"time"
 
+	"go-nx-admin/internal/config"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func jwtSecret() []byte {
+	if config.AppConfig != nil && config.AppConfig.JWT.Secret != "" {
+		return []byte(config.AppConfig.JWT.Secret)
+	}
 	secret := os.Getenv("NX_JWT_SECRET")
 	if secret == "" {
 		secret = os.Getenv("NI" + "UBI_JWT_SECRET")

@@ -9,6 +9,11 @@ import (
 )
 
 func Register(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer, extraRoutes func(api fiber.Router, db *gorm.DB, enforcer *casbin.Enforcer)) {
+	RegisterWithOptions(app, db, enforcer, extraRoutes, false)
+}
+
+// RegisterWithOptions preserves legacy routes while allowing private-media deployments.
+func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer, extraRoutes func(api fiber.Router, db *gorm.DB, enforcer *casbin.Enforcer), disableMedia bool) {
 	api := app.Group("/api/v1", middleware.JWTAuth(db), middleware.CasbinMiddleware(enforcer, db))
 
 	api.Post("/auth/login", handlers.Login(db))
@@ -63,9 +68,11 @@ func Register(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer, extraRoute
 
 	api.Get("/dashboard/stats", handlers.DashboardStats(db))
 
-	api.Get("/media", handlers.ListMedia(db))
-	api.Post("/media/upload", handlers.UploadMedia(db))
-	api.Delete("/media/:id", handlers.DeleteMedia(db))
+	if !disableMedia {
+		api.Get("/media", handlers.ListMedia(db))
+		api.Post("/media/upload", handlers.UploadMedia(db))
+		api.Delete("/media/:id", handlers.DeleteMedia(db))
+	}
 
 	api.Get("/system-configs", handlers.ListSystemConfigs(db))
 	api.Put("/system-configs", handlers.UpdateSystemConfigs(db))
