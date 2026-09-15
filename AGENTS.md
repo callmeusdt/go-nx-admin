@@ -10,6 +10,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
 - 前端通过 `frontend/src/core.tsx` 的 `createApp(opts)` 注入 `extraResources`、`extraRoutes`、`extraRouteLabels`，业务页面留在二开项目自己的 `frontend/src/pages/`。
+- `createApp({i18n:{languages,messages,defaultLocale}})`可选扩展语言列表和文案，不配置仍为原中英。`messages[locale]['login.title']`覆盖登录/侧栏品牌；`routes.<完整路径>`覆盖侧栏/面包屑/页签标题。动态菜单仍以服务端授权为准，翻译不新增菜单权限；业务页使用同一useI18n上下文。
 - 修改扩展接口前先读上述公开入口；底座升级要保持二开可 import 和 embed 构建边界，不用内部包绕过公开 API。
 
 ## 定向定位

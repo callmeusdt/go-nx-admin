@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Menu } from '../../types'
+import { useI18n } from '../../contexts/i18n-context'
 
 interface MenuItem {
   key: string
@@ -64,6 +65,7 @@ function menuToItems(menus: Menu[]): MenuItem[] {
 }
 
 export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
+  const { t, routeLabel } = useI18n()
   const { addTab } = useTabs()
   const navigate = useNavigate()
   const location = useLocation()
@@ -99,7 +101,8 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
       <div key={item.key}>
         <button
           onClick={() => handleMenuClick(item)}
-          title={collapsed ? item.label : undefined}
+          title={collapsed ? routeLabel(item.key, item.label) : undefined}
+          aria-label={routeLabel(item.key, item.label)}
           className={`w-full flex items-center rounded-lg text-sm transition-colors ${
             collapsed
               ? 'justify-center p-2.5'
@@ -112,7 +115,7 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
           style={!collapsed ? { paddingLeft: 12 + depth * 16 } : undefined}
         >
           <IconComponent name={item.icon} className="w-4 h-4 shrink-0" />
-          {!collapsed && <span className="truncate flex-1 text-left">{item.label}</span>}
+          {!collapsed && <span className="truncate flex-1 text-left">{routeLabel(item.key, item.label)}</span>}
           {!collapsed && hasChildren && (
             isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />
           )}
@@ -130,9 +133,9 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
     <aside className={`${collapsed ? 'w-16' : 'w-56'} bg-slate-900 text-white flex flex-col h-full shrink-0 transition-all duration-200`}>
       <div className="h-14 flex items-center border-b border-slate-700 overflow-hidden shrink-0">
         {collapsed ? (
-          <span className="w-full text-center font-bold text-lg">N</span>
+          <span className="w-full text-center font-bold text-lg">{Array.from(t('login.title'))[0]}</span>
         ) : (
-          <h1 className="font-bold text-lg w-full px-5 truncate">NX Admin</h1>
+          <h1 className="font-bold text-lg w-full px-5 truncate">{t('login.title')}</h1>
         )}
       </div>
       <nav className="flex-1 overflow-y-auto p-2 space-y-1">

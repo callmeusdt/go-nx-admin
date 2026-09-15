@@ -2,8 +2,10 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
 import { Pin, RotateCw, X } from 'lucide-react'
+import { useI18n } from '../../contexts/i18n-context'
 
 export const TabBar: React.FC = () => {
+  const { routeLabel } = useI18n()
   const { tabs, activeKey, removeTab, setActiveKey, closeOthers, closeRight, closeLeft, togglePin } = useTabs()
   const navigate = useNavigate()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: string } | null>(null)
@@ -94,7 +96,7 @@ export const TabBar: React.FC = () => {
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
-              <span>{tab.label}</span>
+              <span>{routeLabel(tab.key, tab.label)}</span>
               {tab.pinned && <Pin className="w-3 h-3" />}
               {tab.closable && !tab.pinned && (
                 <span

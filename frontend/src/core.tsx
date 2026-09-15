@@ -11,6 +11,7 @@ import { dataProvider } from './providers/data-provider'
 import { TabsProvider } from './contexts/tabs-context'
 import { LockScreenProvider } from './contexts/lock-screen-context'
 import { I18nProvider } from './contexts/i18n-context'
+import type { I18nOptions } from './contexts/i18n-context'
 import { Layout, RouteLabelsContext } from './components/layout'
 import { LoginPage } from './pages/login'
 import { MFAVerifyPage } from './pages/mfa-verify'
@@ -99,6 +100,7 @@ export interface CreateAppOptions {
   extraRouteLabels?: Record<string, string>
   sessionMode?: 'bearer' | 'cookie'
   disabledResources?: string[]
+  i18n?: I18nOptions
 }
 
 export function createApp(opts?: CreateAppOptions): React.FC {
@@ -107,7 +109,7 @@ export function createApp(opts?: CreateAppOptions): React.FC {
     const resources = [...BUILTIN_RESOURCES.filter(item => !opts?.disabledResources?.includes(item.name)), ...(opts?.extraResources ?? [])]
     return (
       <BrowserRouter>
-        <I18nProvider>
+        <I18nProvider options={opts?.i18n}>
           <Reauthenticate />
           <LockScreenProvider>
             <TabsProvider>

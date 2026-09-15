@@ -1,6 +1,15 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
-type Locale = 'zh-CN' | 'en-US'
+export interface Language { locale: string; label: string; flag?: string }
+export interface I18nOptions {
+  languages?: Language[]
+  messages?: Record<string, Record<string, string>>
+  defaultLocale?: string
+}
+const defaultLanguages: Language[] = [
+  { locale: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
+  { locale: 'en-US', label: 'English', flag: '🇺🇸' },
+]
 
 const zhCN: Record<string, string> = {
   'login.title': 'NX Admin',
@@ -38,6 +47,7 @@ const zhCN: Record<string, string> = {
   'common.loading': '加载中...',
   'common.no_data': '暂无数据',
   'common.actions': '操作',
+  'common.language': '切换语言',
   'common.confirm_delete': '确认删除',
   'common.upload': '上传文件',
   'common.export': '导出',
@@ -90,6 +100,7 @@ const enUS: Record<string, string> = {
   'common.loading': 'Loading...',
   'common.no_data': 'No data',
   'common.actions': 'Actions',
+  'common.language': 'Change language',
   'common.confirm_delete': 'Confirm Delete',
   'common.upload': 'Upload',
   'common.export': 'Export',
@@ -107,9 +118,11 @@ const enUS: Record<string, string> = {
 }
 
 const I18nContext = createContext<{
-  locale: Locale
-  setLocale: (locale: Locale) => void
+  locale: string
+  languages: Language[]
+  setLocale: (locale: string) => void
   t: (key: string) => string
+  routeLabel: (path: string, fallback: string) => string
 } | null>(null)
 
 export const useI18n = () => {
@@ -118,24 +131,32 @@ export const useI18n = () => {
   return ctx
 }
 
-function getDict(locale: Locale): Record<string, string> {
+function getDict(locale: string): Record<string, string> {
   return locale === 'zh-CN' ? zhCN : enUS
 }
 
-export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [locale, setLocale] = useState<Locale>(() => {
+export const I18nProvider: React.FC<{ children: React.ReactNode; options?: I18nOptions }> = ({ children, options }) => {
+  const languages = options?.languages?.length ? options.languages : defaultLanguages
+  const [locale, setLocale] = useState<string>(() => {
     const saved = localStorage.getItem('locale')
-    return (saved === 'en-US' ? 'en-US' : 'zh-CN') as Locale
+    return languages.find(item => item.locale === saved)?.locale
+      ?? languages.find(item => item.locale === options?.defaultLocale)?.locale
+      ?? languages[0].locale
   })
 
-  const updateLocale = useCallback((next: Locale) => {
+  const updateLocale = useCallback((next: string) => {
+    if (!languages.some(item => item.locale === next)) return
     localStorage.setItem('locale', next)
     setLocale(next)
-  }, [])
+  }, [languages])
 
   const t = useCallback((key: string): string => {
-    return getDict(locale)[key] || key
-  }, [locale])
+    return options?.messages?.[locale]?.[key] ?? getDict(locale)[key] ?? key
+  }, [locale, options?.messages])
+  const routeLabel = useCallback((path: string, fallback: string) => {
+    return options?.messages?.[locale]?.[`routes.${path}`] ?? fallback
+  }, [locale, options?.messages])
+  useEffect(() => { document.documentElement.lang = locale }, [locale])
 
-  return <I18nContext.Provider value={{ locale, setLocale: updateLocale, t }}>{children}</I18nContext.Provider>
+  return <I18nContext.Provider value={{ locale, languages, setLocale: updateLocale, t, routeLabel }}>{children}</I18nContext.Provider>
 }

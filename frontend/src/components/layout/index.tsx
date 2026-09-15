@@ -6,6 +6,7 @@ import { UserMenu } from './user-menu'
 import { GlobalTools } from './global-tools'
 import { LockScreen } from './lock-screen'
 import { PanelLeftClose, PanelLeft, ChevronRight, Home } from 'lucide-react'
+import { useI18n } from '../../contexts/i18n-context'
 
 const builtinRouteLabels: Record<string, string> = {
   '/dashboard': '仪表盘',
@@ -22,6 +23,7 @@ const builtinRouteLabels: Record<string, string> = {
 export const RouteLabelsContext = createContext<Record<string, string>>({})
 
 export const Layout: React.FC = () => {
+  const { routeLabel } = useI18n()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   useEffect(() => {
     const viewport = window.matchMedia('(max-width: 767px)')
@@ -38,7 +40,7 @@ export const Layout: React.FC = () => {
     .filter(Boolean)
     .map((seg, i, arr) => {
       const path = '/' + arr.slice(0, i + 1).join('/')
-      return { label: routeLabels[path] || seg, path }
+      return { label: routeLabel(path, routeLabels[path] || seg), path }
     })
 
   return (

@@ -3,21 +3,16 @@ import { Check, ChevronDown } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useI18n } from '../../contexts/i18n-context'
 
-const languages = [
-  { locale: 'zh-CN' as const, flag: '🇨🇳', label: '简体中文' },
-  { locale: 'en-US' as const, flag: '🇺🇸', label: 'English' },
-]
-
 export const GlobalTools: React.FC = () => {
-  const { locale, setLocale } = useI18n()
+  const { locale, setLocale, languages, t } = useI18n()
   const current = languages.find(item => item.locale === locale) || languages[0]
 
   return (
     <div className="flex items-center gap-1 text-gray-500">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-gray-100 text-xs" title="切换语言">
-            <span className="text-base leading-none">{current.flag}</span>
+          <button className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-gray-100 text-xs" title={t('common.language')}>
+            <span className="text-base leading-none">{current.flag || current.label}</span>
             <ChevronDown className="w-3 h-3" />
           </button>
         </DropdownMenu.Trigger>
