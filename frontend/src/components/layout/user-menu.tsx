@@ -153,13 +153,13 @@ export const UserMenu: React.FC = () => {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <button aria-label={username} className="flex min-w-0 items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
             <Avatar className="w-8 h-8">
               <AvatarFallback className="bg-blue-500 text-white text-sm">
                 {usernameInitial}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm text-gray-700">{username}</span>
+            <span className="hidden sm:block max-w-40 truncate text-sm text-gray-700">{username}</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
