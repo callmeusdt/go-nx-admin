@@ -28,13 +28,15 @@ const labelMap: Record<string, string> = {
 export const DashboardPage: React.FC = () => {
   const { t } = useI18n()
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    api.get<DashboardStats>('/dashboard/stats').then(setStats).catch(() => {})
+    api.get<DashboardStats>('/dashboard/stats').then(setStats).catch(() => setFailed(true))
   }, [])
 
   if (!stats) {
-    return <div className="text-center text-slate-400 py-12">加载中...</div>
+    if (failed) return <p role="alert" className="text-red-600 py-12">{t('ui.request_failed')}</p>
+    return <div className="text-center text-slate-400 py-12">{t('common.loading')}</div>
   }
 
   const items = Object.entries(stats).filter(([k]) => k !== 'today_api_calls')

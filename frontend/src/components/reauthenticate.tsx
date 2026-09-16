@@ -6,8 +6,8 @@ import { useI18n } from '../contexts/i18n-context'
 import { sessionFetch } from '../lib/session'
 
 export function Reauthenticate() {
-  const { locale } = useI18n()
-  const copy = locale === 'zh-CN' ? {title:'重新认证',password:'密码',code:'认证器验证码',submit:'验证',cancel:'取消',error:'验证失败，请重试'} : {title:'Reauthenticate',password:'Password',code:'Authenticator code',submit:'Verify',cancel:'Cancel',error:'Verification failed. Try again.'}
+  const { t } = useI18n()
+  const copy = { title: t('reauth.title'), password: t('reauth.password'), code: t('reauth.code'), submit: t('reauth.submit'), cancel: t('reauth.cancel'), error: t('reauth.error') }
   const [open,setOpen]=useState(false),[password,setPassword]=useState(''),[code,setCode]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('')
   const waiting=useRef<((result:boolean)=>void)[]>([])
   const finish=(value:boolean)=>{for(const resolve of waiting.current)resolve(value);waiting.current=[];setOpen(false);setPassword('');setCode('');setError('')}

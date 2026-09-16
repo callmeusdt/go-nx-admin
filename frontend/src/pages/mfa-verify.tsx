@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sessionFetch, rememberLogin, hasPendingMFA, usesCookieSession } from '../lib/session'
+import { useI18n } from '../contexts/i18n-context'
 
 export const MFAVerifyPage: React.FC = () => {
+  const { t } = useI18n()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,7 +20,7 @@ export const MFAVerifyPage: React.FC = () => {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!code) { setError('请输入验证码'); return }
+    if (!code) { setError(t('mfa.required')); return }
     setLoading(true)
     setError('')
     try {
@@ -37,10 +39,10 @@ export const MFAVerifyPage: React.FC = () => {
         rememberLogin(data)
         navigate('/dashboard', { replace: true })
       } else {
-        setError(data.message || '验证失败')
+        setError(t('mfa.failed'))
       }
     } catch {
-      setError('网络错误')
+      setError(t('login.network_error'))
     } finally {
       setLoading(false)
     }
@@ -56,8 +58,9 @@ export const MFAVerifyPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
       <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">两步验证</h1>
-          <p className="text-slate-500 mt-2">{username}，请输入认证器中的 6 位验证码或恢复码</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t('mfa.title')}</h1>
+          {username ? <p className="text-slate-500 mt-2 break-all">{username}</p> : null}
+          <p className="text-slate-500 mt-2">{t('mfa.hint')}</p>
         </div>
         <form onSubmit={handleVerify} className="space-y-4">
           <div>
@@ -65,7 +68,8 @@ export const MFAVerifyPage: React.FC = () => {
               type="text"
               value={code}
               onChange={e => setCode(e.target.value)}
-              placeholder="6 位验证码 或 恢复码"
+              placeholder={t('mfa.code')}
+              aria-label={t('mfa.code')}
               maxLength={64}
               autoComplete="one-time-code"
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-center text-lg tracking-wider focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
@@ -77,14 +81,14 @@ export const MFAVerifyPage: React.FC = () => {
             disabled={loading}
             className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? '验证中...' : '验证'}
+            {loading ? t('mfa.verifying') : t('mfa.verify')}
           </button>
           <button
             type="button"
             onClick={handleBack}
             className="w-full py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
-            返回登录
+            {t('mfa.back')}
           </button>
         </form>
       </div>

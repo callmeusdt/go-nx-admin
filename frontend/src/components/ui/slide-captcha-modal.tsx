@@ -119,9 +119,9 @@ export const SlideCaptchaModal: React.FC<SlideCaptchaModalProps> = ({
           </button>
         </div>
 
-        <div className="text-center mt-2 h-5">
+        <div className="mt-2 flex min-h-5 flex-col items-center text-center leading-5">
           {error && <span className="text-red-500 text-xs">{error}</span>}
-          {hasCooldown && <span className="text-amber-500 text-xs">{cooldown} 秒后可重试</span>}
+          {hasCooldown && <span className="text-amber-500 text-xs">{t('captcha.retry_after').replace('{seconds}', String(cooldown))}</span>}
         </div>
       </div>
     </div>

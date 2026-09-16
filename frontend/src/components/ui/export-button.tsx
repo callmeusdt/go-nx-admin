@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Download } from 'lucide-react'
+import { useI18n } from '../../contexts/i18n-context'
 
 interface ColumnDef {
   key: string
@@ -14,6 +15,7 @@ interface ExportButtonProps {
 }
 
 export const ExportButton: React.FC<ExportButtonProps> = ({ columns, fetcher, filename }) => {
+  const { t } = useI18n()
   const [loading, setLoading] = useState(false)
 
   const handleExport = async () => {
@@ -50,7 +52,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ columns, fetcher, fi
     <button onClick={handleExport} disabled={loading}
       className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 text-sm">
       <Download className="w-4 h-4" />
-      {loading ? '导出中...' : '导出'}
+      {loading ? t('export.loading') : t('common.export')}
     </button>
   )
 }

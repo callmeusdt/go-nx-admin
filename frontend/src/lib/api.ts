@@ -1,4 +1,5 @@
 import { sessionFetch, clearSession } from './session'
+import { builtinMessage } from '../contexts/i18n-context'
 const BASE = '/api/v1'
 
 async function request<T = any>(
@@ -17,12 +18,12 @@ async function request<T = any>(
   if (res.status === 401) {
     clearSession()
     window.location.href = '/login'
-    throw new Error('登录已失效，请重新登录')
+    throw new Error(builtinMessage(document.documentElement.lang, 'auth.session_expired'))
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: 'request failed' }))
-    throw new Error(err.message || 'request failed')
+    await res.json().catch(() => null)
+    throw new Error(builtinMessage(document.documentElement.lang, 'ui.request_failed'))
   }
 
   return res.json()

@@ -1,5 +1,6 @@
 import type { AuthProvider } from '@refinedev/core'
 import { sessionFetch, rememberLogin, clearSession } from '../lib/session'
+import { builtinMessage } from '../contexts/i18n-context'
 
 export const authProvider: AuthProvider = {
   login: async ({ username, password }) => {
@@ -9,8 +10,8 @@ export const authProvider: AuthProvider = {
       body: JSON.stringify({ username, password }),
     })
     if (!res.ok) {
-      const data = await res.json()
-      return { success: false, error: new Error(data.message || 'Login failed') }
+      await res.json().catch(() => null)
+      return { success: false, error: new Error(builtinMessage(document.documentElement.lang, 'auth.login_failed')) }
     }
     const data = await res.json()
     rememberLogin(data)
@@ -18,7 +19,7 @@ export const authProvider: AuthProvider = {
   },
   logout: async () => {
     const result = await sessionFetch('/api/v1/auth/logout', { method: 'POST' })
-    if (!result.ok && result.status !== 401) return { success: false, error: new Error('Logout failed') }
+    if (!result.ok && result.status !== 401) return { success: false, error: new Error(builtinMessage(document.documentElement.lang, 'ui.request_failed')) }
     clearSession()
     return { success: true, redirectTo: '/login' }
   },

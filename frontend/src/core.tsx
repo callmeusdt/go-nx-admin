@@ -10,7 +10,7 @@ import { authProvider } from './providers/auth-provider'
 import { dataProvider } from './providers/data-provider'
 import { TabsProvider } from './contexts/tabs-context'
 import { LockScreenProvider } from './contexts/lock-screen-context'
-import { I18nProvider } from './contexts/i18n-context'
+import { I18nProvider, useI18n } from './contexts/i18n-context'
 import type { I18nOptions } from './contexts/i18n-context'
 import { Layout, RouteLabelsContext } from './components/layout'
 import { LoginPage } from './pages/login'
@@ -38,6 +38,7 @@ const BUILTIN_RESOURCES: ResourceProps[] = [
 ]
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useI18n()
   const location = useLocation()
   const [state, setState] = useState<'loading' | 'ready' | 'login' | 'enroll'>('loading')
   useEffect(() => {
@@ -52,7 +53,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return () => { active = false }
   }, [location.pathname])
   if (usesCookieSession()) {
-    if(state==='loading')return <div role="status" aria-label="Loading" />
+    if(state==='loading')return <div role="status" aria-label={t('common.loading')} />
     if(state==='login')return <Navigate to="/login" replace />
     if(state==='enroll')return <EnrollmentPage />
     return <>{children}</>

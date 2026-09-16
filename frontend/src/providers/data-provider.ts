@@ -1,5 +1,6 @@
 import type { DataProvider } from '@refinedev/core'
 import { sessionFetch, clearSession } from '../lib/session'
+import { builtinMessage } from '../contexts/i18n-context'
 
 const API_URL = '/api/v1'
 
@@ -14,8 +15,8 @@ const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     window.location.href = '/login'
   }
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw { statusCode: res.status, message: data.message || res.statusText }
+    await res.json().catch(() => ({}))
+    throw { statusCode: res.status, message: builtinMessage(document.documentElement.lang, res.status === 401 ? 'auth.session_expired' : 'ui.request_failed') }
   }
   return res.json()
 }

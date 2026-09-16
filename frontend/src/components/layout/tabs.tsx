@@ -5,7 +5,7 @@ import { Pin, RotateCw, X } from 'lucide-react'
 import { useI18n } from '../../contexts/i18n-context'
 
 export const TabBar: React.FC = () => {
-  const { routeLabel } = useI18n()
+  const { routeLabel, t } = useI18n()
   const { tabs, activeKey, removeTab, setActiveKey, closeOthers, closeRight, closeLeft, togglePin } = useTabs()
   const navigate = useNavigate()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: string } | null>(null)
@@ -101,6 +101,7 @@ export const TabBar: React.FC = () => {
               {tab.closable && !tab.pinned && (
                 <span
                   onClick={e => handleTabClose(e, tab.key)}
+                  aria-label={t('tabs.close')}
                   className="inline-flex items-center justify-center w-4 h-4 rounded hover:bg-gray-200 transition-colors"
                 >
                   <X className="w-3 h-3" />
@@ -117,12 +118,12 @@ export const TabBar: React.FC = () => {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={e => e.stopPropagation()}
         >
-          <button onClick={execCloseOthers} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">关闭其他</button>
-          <button onClick={execCloseLeft} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">关闭左侧</button>
-          <button onClick={execCloseRight} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">关闭右侧</button>
-          <button onClick={execRefresh} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"><RotateCw className="inline w-3 h-3 mr-1" />刷新当前</button>
-          <button onClick={execTogglePin} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">固定/取消固定</button>
-          <button onClick={execCloseAll} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">关闭全部</button>
+          <button onClick={execCloseOthers} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_others')}</button>
+          <button onClick={execCloseLeft} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_left')}</button>
+          <button onClick={execCloseRight} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_right')}</button>
+          <button onClick={execRefresh} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"><RotateCw className="inline w-3 h-3 mr-1" />{t('tabs.refresh')}</button>
+          <button onClick={execTogglePin} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.toggle_pin')}</button>
+          <button onClick={execCloseAll} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_all')}</button>
         </div>
       )}
     </>

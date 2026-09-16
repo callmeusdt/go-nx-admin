@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, Loader2, Wifi, WifiOff, Ban, Shield, ShieldOff, Monitor } from 'lucide-react'
 import { api } from '../../lib/api'
+import { useI18n } from '../../contexts/i18n-context'
 import { User, Role, IPWhitelist } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 
 export const UsersPage: React.FC = () => {
+  const { t, locale } = useI18n()
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; user?: User }>({ open: false, mode: 'create' })
   const [delId, setDelId] = useState<number | null>(null)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
@@ -22,19 +25,19 @@ export const UsersPage: React.FC = () => {
     try {
       const res = await api.get<{ data: User[] }>('/users')
       setUsers(res.data)
+    } catch {
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
   }, [])
 
   const fetchRoles = useCallback(async () => {
-    const res = await api.get<{ data: Role[] }>('/roles')
-    setRoles(res.data)
+    try { const res = await api.get<{ data: Role[] }>('/roles'); setRoles(res.data) } catch { setLoadFailed(true) }
   }, [])
 
   const fetchCurrentUser = useCallback(async () => {
-    const res = await api.get<{ id: number }>('/auth/me')
-    setCurrentUserId(res.id)
+    try { const res = await api.get<{ id: number }>('/auth/me'); setCurrentUserId(res.id) } catch { setLoadFailed(true) }
   }, [])
 
   useEffect(() => { fetchUsers(); fetchRoles(); fetchCurrentUser() }, [fetchUsers, fetchRoles, fetchCurrentUser])
@@ -52,8 +55,8 @@ export const UsersPage: React.FC = () => {
   }
 
   const handleSave = async () => {
-    if (!form.username) { setError('请输入用户名'); return }
-    if (dialog.mode === 'create' && !form.password) { setError('请输入密码'); return }
+    if (!form.username) { setError(t('users.username_required')); return }
+    if (dialog.mode === 'create' && !form.password) { setError(t('users.password_required')); return }
     setSaving(true)
     try {
       if (dialog.mode === 'create') {
@@ -63,8 +66,8 @@ export const UsersPage: React.FC = () => {
       }
       setDialog({ open: false, mode: 'create' })
       fetchUsers()
-    } catch (e: any) {
-      setError(e.message)
+    } catch {
+      setError(t('users.failed'))
     } finally {
       setSaving(false)
     }
@@ -105,15 +108,15 @@ export const UsersPage: React.FC = () => {
   }
 
   const saveIPWhitelist = async () => {
-    if (!ipForm.ip) { setIPError('请输入 IP 地址'); return }
+    if (!ipForm.ip) { setIPError(t('users.ip_required')); return }
     setIPLoading(true)
     try {
       await api.post(`/users/${ipWhitelistUser!.id}/ip-whitelists`, ipForm)
       setIPForm({ ip: '', remark: '' })
       setIPError('')
       loadIPWhitelists(ipWhitelistUser!.id)
-    } catch (e: any) {
-      setIPError(e.message)
+    } catch {
+      setIPError(t('users.failed'))
     } finally {
       setIPLoading(false)
     }
@@ -139,27 +142,28 @@ export const UsersPage: React.FC = () => {
     fetchUsers()
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">用户管理</h2>
-        <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />新增用户</Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xl font-bold text-slate-800">{t('users.title')}</h2>
+        <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t('users.create')}</Button>
       </div>
+      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">用户名</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">角色</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">账号状态</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">在线状态</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">最近 IP</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">创建时间</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">操作</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.username')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.role')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.account_status')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.online_status')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.recent_ip')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.created_at')}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -174,18 +178,18 @@ export const UsersPage: React.FC = () => {
                 </td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${u.status === 1 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {u.status === 1 ? '启用' : '禁用'}
+                    {u.status === 1 ? t('users.enabled') : t('users.disabled')}
                   </span>
                 </td>
                 <td className="px-4 py-2.5">
                   {u.is_online ? (
                     <button onClick={() => setSessionUser(u)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
                       <Wifi className="w-3 h-3" />
-                      在线 {u.online_session_count || u.online_sessions?.length || 1}
+                      {t('users.online_count').replace('{count}', String(u.online_session_count || u.online_sessions?.length || 1))}
                     </button>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-                      <WifiOff className="w-3 h-3" />离线
+                      <WifiOff className="w-3 h-3" />{t('users.offline')}
                     </span>
                   )}
                 </td>
@@ -195,16 +199,17 @@ export const UsersPage: React.FC = () => {
                     {u.online_user_agent && <div className="mt-0.5 truncate text-[11px] text-gray-400" title={u.online_user_agent}>{u.online_user_agent}</div>}
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(u.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(u.created_at).toLocaleDateString(locale)}</td>
                 <td className="px-4 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => openIPWhitelist(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600" title="IP白名单"><Shield className="w-4 h-4" /></button>
+                    <button aria-label={t('users.edit')} title={t('users.edit')} onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => openIPWhitelist(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600" title={t('users.ip_whitelist')} aria-label={t('users.ip_whitelist')}><Shield className="w-4 h-4" /></button>
                     <button
                       onClick={() => u.mfa_enabled && setClearMfaUser(u)}
                       disabled={!u.mfa_enabled}
                       className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                      title={u.mfa_enabled ? '清空MFA' : '未启用MFA'}
+                      title={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
+                      aria-label={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
                     >
                       <ShieldOff className="w-4 h-4" />
                     </button>
@@ -212,7 +217,8 @@ export const UsersPage: React.FC = () => {
                       onClick={() => currentUserId !== u.id && setDelId(u.id)}
                       disabled={currentUserId === u.id}
                       className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
-                      title={currentUserId === u.id ? '不能删除当前登录账户' : '删除用户'}
+                      title={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
+                      aria-label={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -221,29 +227,30 @@ export const UsersPage: React.FC = () => {
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-8 text-gray-400">暂无数据</td></tr>
+              <tr><td colSpan={8} className="text-left px-4 py-8 text-gray-400">{t('common.no_data')}</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <Dialog open={dialog.open} onOpenChange={v => !v && setDialog(p => ({ ...p, open: false }))}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto break-words">
           <DialogHeader>
-            <DialogTitle>{dialog.mode === 'create' ? '新增用户' : '编辑用户'}</DialogTitle>
+            <DialogTitle>{dialog.mode === 'create' ? t('users.create') : t('users.edit')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="text-sm font-medium mb-1 block">用户名</label>
-              <Input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="用户名" />
+              <label className="text-sm font-medium mb-1 block">{t('users.username')}</label>
+              <Input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder={t('users.username')} aria-label={t('users.username')} />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">密码{dialog.mode === 'edit' && '（留空不修改）'}</label>
-              <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="密码" />
+              <label className="text-sm font-medium mb-1 block">{t(dialog.mode === 'edit' ? 'users.password_unchanged' : 'users.password')}</label>
+              <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={t('users.password')} aria-label={t('users.password')} />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">角色</label>
+              <label className="text-sm font-medium mb-1 block">{t('users.role')}</label>
               <select
+                aria-label={t('users.role')}
                 value={form.role_id}
                 onChange={e => setForm(f => ({ ...f, role_id: Number(e.target.value) }))}
                 className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -253,48 +260,49 @@ export const UsersPage: React.FC = () => {
             </div>
             {dialog.mode === 'edit' && (
               <div>
-                <label className="text-sm font-medium mb-1 block">状态</label>
+                <label className="text-sm font-medium mb-1 block">{t('users.status')}</label>
                 <select
+                  aria-label={t('users.status')}
                   value={form.status}
                   onChange={e => setForm(f => ({ ...f, status: Number(e.target.value) }))}
                   className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value={1}>启用</option>
-                  <option value={0}>禁用</option>
+                  <option value={1}>{t('users.enabled')}</option>
+                  <option value={0}>{t('users.disabled')}</option>
                 </select>
               </div>
             )}
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>取消</Button>
-              <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+            {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>
+              <Button onClick={handleSave} disabled={saving}>{saving ? t('users.saving') : t('common.save')}</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!delId} onOpenChange={v => !v && setDelId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader>
-          <p className="text-gray-500 text-sm py-2">确定要删除该用户吗？此操作不可撤销。</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDelId(null)}>取消</Button>
-            <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+        <DialogContent className="max-h-[90vh] overflow-y-auto break-words">
+          <DialogHeader><DialogTitle>{t('common.confirm_delete')}</DialogTitle></DialogHeader>
+          <p className="text-gray-500 text-sm py-2">{t('users.delete_hint')}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setDelId(null)}>{t('common.cancel')}</Button>
+            <Button variant="destructive" onClick={handleDelete}>{t('common.confirm_delete')}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!sessionUser} onOpenChange={v => !v && setSessionUser(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>{sessionUser?.username} 的在线会话</DialogTitle></DialogHeader>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto break-words">
+          <DialogHeader><DialogTitle>{t('users.sessions_title').replace('{username}', sessionUser?.username || '')}</DialogTitle></DialogHeader>
+          <div className="rounded-lg border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">IP</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">User-Agent</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">登录时间</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">操作</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.login_at')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -302,24 +310,24 @@ export const UsersPage: React.FC = () => {
                   <tr key={session.id} className="border-b border-gray-100 last:border-0">
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{session.ip || '-'}</td>
                     <td className="px-4 py-2.5 max-w-[300px] truncate text-xs text-gray-500" title={session.user_agent}>{session.user_agent || '-'}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{new Date(session.login_at).toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{new Date(session.login_at).toLocaleString(locale)}</td>
                     <td className="px-4 py-2.5 text-right">
                       {session.is_current ? (
-                        <span className="inline-flex rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">当前会话</span>
+                        <span className="inline-flex rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{t('users.current_session')}</span>
                       ) : (
                         <button
                           onClick={() => kickSession(session.id)}
                           disabled={!session.can_kick}
                           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Ban className="w-3 h-3" />踢下线
+                          <Ban className="w-3 h-3" />{t('users.kick')}
                         </button>
                       )}
                     </td>
                   </tr>
                 ))}
                 {!sessionUser?.online_sessions?.length && (
-                  <tr><td colSpan={4} className="py-8 text-center text-gray-400">暂无在线会话</td></tr>
+                  <tr><td colSpan={4} className="py-8 text-center text-gray-400">{t('users.no_sessions')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -328,29 +336,29 @@ export const UsersPage: React.FC = () => {
       </Dialog>
 
       <Dialog open={!!ipWhitelistUser} onOpenChange={v => !v && setIPWhitelistUser(null)}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>{ipWhitelistUser?.username} 的登录 IP 白名单</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto break-words">
+          <DialogHeader><DialogTitle>{t('users.whitelist_title').replace('{username}', ipWhitelistUser?.username || '')}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="flex gap-2 items-center">
-              <div className="relative flex-1">
-                <Input placeholder="IP 地址 (例如 192.168.1.100)" value={ipForm.ip} onChange={e => setIPForm(f => ({ ...f, ip: e.target.value }))} className="pr-9" />
-                <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setIPForm(f => ({ ...f, ip: r.ip })) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title="填入本机IP">
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative min-w-[180px] flex-1">
+                <Input placeholder={t('users.ip_hint')} aria-label={t('users.ip_hint')} value={ipForm.ip} onChange={e => setIPForm(f => ({ ...f, ip: e.target.value }))} className="pr-9" />
+                <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setIPForm(f => ({ ...f, ip: r.ip })) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title={t('users.use_current_ip')} aria-label={t('users.use_current_ip')}>
                   <Monitor className="w-4 h-4" />
                 </button>
               </div>
-              <Input placeholder="备注" value={ipForm.remark} onChange={e => setIPForm(f => ({ ...f, remark: e.target.value }))} className="w-28 shrink-0" />
-              <Button size="sm" onClick={saveIPWhitelist} disabled={ipLoading}><Plus className="w-4 h-4" /></Button>
+              <Input placeholder={t('users.remark')} aria-label={t('users.remark')} value={ipForm.remark} onChange={e => setIPForm(f => ({ ...f, remark: e.target.value }))} className="w-28 shrink-0" />
+              <Button size="sm" aria-label={t('common.create')} onClick={saveIPWhitelist} disabled={ipLoading}><Plus className="w-4 h-4" /></Button>
             </div>
-            {ipError && <p className="text-red-500 text-xs">{ipError}</p>}
+            {ipError && <p role="alert" className="text-red-500 text-xs">{ipError}</p>}
           </div>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <div className="rounded-lg border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2 font-medium text-gray-600">IP</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">备注</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">状态</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">操作</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">{t('users.remark')}</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">{t('users.status')}</th>
+                  <th className="text-right px-4 py-2 font-medium text-gray-600">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -365,18 +373,18 @@ export const UsersPage: React.FC = () => {
                         onClick={() => toggleIPWhitelist(rule)}
                         className={`inline-flex px-2 py-0.5 rounded-full text-xs ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}
                       >
-                        {rule.enabled ? '启用' : '禁用'}
+                        {rule.enabled ? t('users.enabled') : t('users.disabled')}
                       </button>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button onClick={() => deleteIPWhitelist(rule.id)} className="text-red-500 hover:text-red-700">
+                      <button aria-label={t('common.delete')} onClick={() => deleteIPWhitelist(rule.id)} className="text-red-500 hover:text-red-700">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {ipWhitelists.length === 0 && (
-                  <tr><td colSpan={4} className="py-8 text-center text-gray-400 text-xs">暂无白名单规则（无规则时默认放行）</td></tr>
+                  <tr><td colSpan={4} className="py-8 text-center text-gray-400 text-xs">{t('users.whitelist_empty')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -385,14 +393,14 @@ export const UsersPage: React.FC = () => {
       </Dialog>
 
       <Dialog open={!!clearMfaUser} onOpenChange={v => !v && setClearMfaUser(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>清空 MFA</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto break-words">
+          <DialogHeader><DialogTitle>{t('users.clear_mfa')}</DialogTitle></DialogHeader>
           <p className="text-gray-500 text-sm py-2">
-            确定要清空用户 <strong>{clearMfaUser?.username}</strong> 的 MFA 设置吗？此操作将移除该用户的两步验证，且不可撤销。
+            {t('users.clear_mfa_hint').replace('{username}', clearMfaUser?.username || '')}
           </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setClearMfaUser(null)}>取消</Button>
-            <Button variant="destructive" onClick={clearMFA}>确认清空</Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setClearMfaUser(null)}>{t('common.cancel')}</Button>
+            <Button variant="destructive" onClick={clearMFA}>{t('users.confirm_clear_mfa')}</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -23,7 +23,7 @@ const builtinRouteLabels: Record<string, string> = {
 export const RouteLabelsContext = createContext<Record<string, string>>({})
 
 export const Layout: React.FC = () => {
-  const { routeLabel } = useI18n()
+  const { routeLabel, t } = useI18n()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   useEffect(() => {
     const viewport = window.matchMedia('(max-width: 767px)')
@@ -49,7 +49,7 @@ export const Layout: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center gap-2 px-3 shrink-0">
           <button
-            aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={t(sidebarCollapsed ? 'navigation.expand' : 'navigation.collapse')}
             aria-expanded={!sidebarCollapsed}
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"

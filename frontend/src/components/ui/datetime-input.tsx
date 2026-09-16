@@ -1,6 +1,13 @@
 import React, { useEffect, useRef } from 'react'
 import flatpickr from 'flatpickr'
 import { CalendarDays } from 'lucide-react'
+import { Mandarin } from 'flatpickr/dist/l10n/zh'
+import { MandarinTraditional } from 'flatpickr/dist/l10n/zh-tw'
+import { Spanish } from 'flatpickr/dist/l10n/es'
+import { Vietnamese } from 'flatpickr/dist/l10n/vn'
+import { useI18n } from '../../contexts/i18n-context'
+
+const calendarLocales = { 'zh-CN': Mandarin, 'zh-TW': MandarinTraditional, es: Spanish, vi: Vietnamese }
 
 interface DateTimeInputProps {
   value: string
@@ -9,8 +16,11 @@ interface DateTimeInputProps {
 }
 
 export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder, onChange }) => {
+  const { locale } = useI18n()
   const ref = useRef<HTMLInputElement>(null)
   const fpRef = useRef<flatpickr.Instance | null>(null)
+  const changeRef = useRef(onChange)
+  changeRef.current = onChange
 
   useEffect(() => {
     if (!ref.current) return
@@ -20,17 +30,18 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder
       dateFormat: 'Y-m-d H:i',
       time_24hr: true,
       allowInput: false,
+      locale: calendarLocales[locale as keyof typeof calendarLocales] ?? 'default',
       onChange: (selectedDates, dateStr) => {
-        onChange(dateStr)
+        changeRef.current(dateStr)
       },
     })
     return () => { fpRef.current?.destroy() }
-  }, [])
+  }, [locale])
 
   useEffect(() => {
     if (!fpRef.current) return
     fpRef.current.setDate(value || '', false)
-  }, [value])
+  }, [value, locale])
 
   return (
     <div className="relative">

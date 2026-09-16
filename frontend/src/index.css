@@ -54,6 +54,25 @@
   font-weight: 700;
 }
 
+/* Keep localized month names and the year on the same calendar header row. */
+.flatpickr-calendar .flatpickr-current-month {
+  display: flex;
+  font-size: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.flatpickr-calendar .flatpickr-current-month .flatpickr-monthDropdown-months {
+  min-width: 0;
+  max-width: calc(100% - 6ch - 4px);
+  margin: 0;
+}
+
+.flatpickr-calendar .flatpickr-current-month .numInputWrapper {
+  flex: 0 0 6ch;
+}
+
 .numInputWrapper span.arrowUp:after {
   border-bottom-color: rgba(0,0,0,0.54);
 }

@@ -17,8 +17,10 @@ import { useLockScreen } from '../../contexts/lock-screen-context'
 import { api } from '../../lib/api'
 import { sessionFetch, clearSession } from '../../lib/session'
 import { IPWhitelist } from '../../types'
+import { useI18n } from '../../contexts/i18n-context'
 
 export const UserMenu: React.FC = () => {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const { lock } = useLockScreen()
   const [profileOpen, setProfileOpen] = useState(false)
@@ -29,7 +31,6 @@ export const UserMenu: React.FC = () => {
   const [mfaPassword, setMfaPassword] = useState('')
   const [mfaError, setMfaError] = useState('')
   const [mfaSecret, setMfaSecret] = useState('')
-  const [mfaUrl, setMfaUrl] = useState('')
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [mfaLoading, setMfaLoading] = useState(false)
@@ -51,7 +52,7 @@ export const UserMenu: React.FC = () => {
   }, [profileOpen])
 
   const addMyIP = async () => {
-    if (!myIP) { setMyIPError('请输入 IP'); return }
+    if (!myIP) { setMyIPError(t('account.ip_required')); return }
     try {
       const me = await api.get<{ id: number }>('/auth/me')
       await api.post(`/users/${me.id}/ip-whitelists`, { ip: myIP, remark: myIPRemark })
@@ -60,7 +61,7 @@ export const UserMenu: React.FC = () => {
       setMyIPError('')
       fetchMyWhitelists()
     } catch (e: any) {
-      setMyIPError(e.message)
+      setMyIPError(t('account.ip_error'))
     }
   }
 
@@ -96,45 +97,48 @@ export const UserMenu: React.FC = () => {
     setMfaPassword('')
     setMfaError('')
     setRecoveryCodes([])
+    setMfaSecret('')
   }
 
   const startSetup = async () => {
     setMfaLoading(true)
+    setMfaError('')
     try {
       const res = await api.post<{ secret: string; url: string }>('/auth/mfa/setup')
       setMfaSecret(res.secret)
-      setMfaUrl(res.url)
       setMfaStep('setup')
     } catch (e: any) {
-      setMfaError(e.message)
+      setMfaError(t('account.mfa_error'))
     } finally {
       setMfaLoading(false)
     }
   }
 
   const enableMFA = async () => {
-    if (!mfaCode) { setMfaError('请输入验证码'); return }
+    if (!mfaCode) { setMfaError(t('account.mfa_required')); return }
     setMfaLoading(true)
+    setMfaError('')
     try {
       const res = await api.post<{ recovery_codes: string[] }>('/auth/mfa/enable', { code: mfaCode })
       setRecoveryCodes(res.recovery_codes)
       setMfaStep('codes')
     } catch (e: any) {
-      setMfaError(e.message)
+      setMfaError(t('account.mfa_error'))
     } finally {
       setMfaLoading(false)
     }
   }
 
   const disableMFA = async () => {
-    if (!mfaPassword) { setMfaError('请输入密码'); return }
-    if (!mfaCode) { setMfaError('请输入验证码'); return }
+    if (!mfaPassword) { setMfaError(t('account.password_required')); return }
+    if (!mfaCode) { setMfaError(t('account.mfa_required')); return }
     setMfaLoading(true)
+    setMfaError('')
     try {
       await api.post('/auth/mfa/disable', { password: mfaPassword, code: mfaCode })
       closeMfa()
     } catch (e: any) {
-      setMfaError(e.message)
+      setMfaError(t('account.mfa_error'))
     } finally {
       setMfaLoading(false)
     }
@@ -163,54 +167,54 @@ export const UserMenu: React.FC = () => {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>我的账号</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('account.title')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setProfileOpen(true)}>
             <User className="w-4 h-4 mr-2" />
-            账号管理
+            {t('account.manage')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMfaOpen(true)}>
             <Shield className="w-4 h-4 mr-2" />
-            MFA 设置
+            {t('account.mfa_settings')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={lock}>
             <Lock className="w-4 h-4 mr-2" />
-            锁屏
+            {t('account.lock')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="text-red-600">
             <LogOut className="w-4 h-4 mr-2" />
-            注销登录
+            {t('account.logout')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>账号管理</DialogTitle>
-            <DialogDescription>修改你的个人信息和登录安全设置</DialogDescription>
+            <DialogTitle>{t('account.manage')}</DialogTitle>
+            <DialogDescription>{t('account.hint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">用户名</label>
+              <label className="text-sm font-medium">{t('account.username')}</label>
               <Input
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="输入用户名"
+                placeholder={t('account.username_placeholder')}
               />
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-gray-400">配置后仅允许指定 IP 登录，留空则不限制</p>
-              <div className="flex gap-2 items-center">
-                <div className="relative flex-1">
-                  <Input placeholder="IP 地址 (例如 192.168.1.100)" value={myIP} onChange={e => setMyIP(e.target.value)} className="pr-9" />
-                  <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title="填入本机IP">
+              <p className="text-xs text-gray-400">{t('account.ip_hint')}</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative min-w-40 flex-1">
+                  <Input placeholder={t('account.ip_placeholder')} value={myIP} onChange={e => setMyIP(e.target.value)} className="pr-9" />
+                  <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title={t('account.current_ip')}>
                     <Monitor className="w-4 h-4" />
                   </button>
                 </div>
-                <Input placeholder="备注" value={myIPRemark} onChange={e => setMyIPRemark(e.target.value)} className="w-28 shrink-0" />
-                <Button size="sm" onClick={addMyIP}><Plus className="w-4 h-4" /></Button>
+                <Input placeholder={t('account.remark')} value={myIPRemark} onChange={e => setMyIPRemark(e.target.value)} className="w-28 shrink-0" />
+                <Button size="sm" aria-label={t('account.add_ip')} onClick={addMyIP}><Plus className="w-4 h-4" /></Button>
               </div>
               {myIPError && <p className="text-red-500 text-xs">{myIPError}</p>}
               {myWhitelists.length > 0 && (
@@ -223,11 +227,11 @@ export const UserMenu: React.FC = () => {
                           <td className="px-3 py-2 text-xs text-gray-400">{rule.remark || '-'}</td>
                           <td className="px-3 py-2">
                             <button onClick={() => toggleMyIP(rule)} className={`text-xs px-2 py-0.5 rounded-full ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                              {rule.enabled ? '启用' : '禁用'}
+                              {rule.enabled ? t('account.enabled') : t('account.disabled')}
                             </button>
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <button onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
+                            <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
                           </td>
                         </tr>
                       ))}
@@ -242,74 +246,68 @@ export const UserMenu: React.FC = () => {
                 setProfileOpen(false)
               }}
             >
-              保存
+              {t('account.save')}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={mfaOpen} onOpenChange={v => { if (!v) closeMfa() }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>MFA 两步验证</DialogTitle>
-            <DialogDescription>{mfaEnabled ? '当前已启用' : '当前未启用'}</DialogDescription>
+            <DialogTitle>{t('account.mfa_title')}</DialogTitle>
+            <DialogDescription>{mfaEnabled ? t('account.mfa_enabled') : t('account.mfa_disabled')}</DialogDescription>
           </DialogHeader>
           <div className="py-4">
+            {mfaStep === 'idle' && mfaError && <p role="alert" className="text-red-500 text-sm mb-3">{mfaError}</p>}
             {mfaStep === 'idle' && (
               <div className="space-y-3">
                 {mfaEnabled ? (
                   <>
-                    <Button variant="destructive" onClick={() => setMfaStep('disable')} className="w-full">关闭 MFA</Button>
-                    <p className="text-xs text-gray-400 text-center">关闭后登录不再需要二次验证</p>
+                    <Button variant="destructive" onClick={() => setMfaStep('disable')} className="w-full">{t('account.mfa_disable')}</Button>
+                    <p className="text-xs text-gray-400 text-center">{t('account.mfa_disable_hint')}</p>
                   </>
                 ) : (
                   <Button onClick={startSetup} disabled={mfaLoading} className="w-full">
-                    {mfaLoading ? '生成中...' : '启用 MFA'}
+                    {mfaLoading ? t('account.mfa_generating') : t('account.mfa_enable')}
                   </Button>
                 )}
               </div>
             )}
             {mfaStep === 'setup' && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">使用 Google Authenticator 或其他 TOTP 应用扫描二维码，或手动输入密钥</p>
+                <p className="text-sm text-gray-500">{t('account.mfa_setup_hint')}</p>
                 <div className="text-center">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(mfaUrl)}`}
-                    alt="QR Code"
-                    className="mx-auto rounded-lg border w-[180px] h-[180px]"
-                  />
+                  <code aria-label={t('account.mfa_secret')} className="text-xs bg-gray-100 px-2 py-1 rounded break-all">{mfaSecret}</code>
                 </div>
-                <div className="text-center">
-                  <code className="text-xs bg-gray-100 px-2 py-1 rounded break-all">{mfaSecret}</code>
-                </div>
-                <Input placeholder="输入 6 位验证码" value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
+                <Input placeholder={t('account.mfa_code')} value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
                 {mfaError && <p className="text-red-500 text-sm">{mfaError}</p>}
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={closeMfa} className="flex-1">取消</Button>
-                  <Button onClick={enableMFA} disabled={mfaLoading} className="flex-1">验证并启用</Button>
+                  <Button variant="outline" onClick={closeMfa} className="flex-1">{t('account.cancel')}</Button>
+                  <Button onClick={enableMFA} disabled={mfaLoading} className="flex-1">{t('account.mfa_verify_enable')}</Button>
                 </div>
               </div>
             )}
             {mfaStep === 'codes' && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">MFA 已启用。请妥善保存以下恢复码，每个恢复码仅可使用一次：</p>
+                <p className="text-sm text-gray-500">{t('account.mfa_codes_hint')}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {recoveryCodes.map((c, i) => (
                     <code key={i} className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">{c}</code>
                   ))}
                 </div>
-                <Button onClick={closeMfa} className="w-full">我已妥善保存</Button>
+                <Button onClick={closeMfa} className="w-full">{t('account.mfa_saved')}</Button>
               </div>
             )}
             {mfaStep === 'disable' && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">关闭 MFA 需要验证密码和 TOTP 验证码</p>
-                <Input type="password" placeholder="登录密码" value={mfaPassword} onChange={e => setMfaPassword(e.target.value)} />
-                <Input placeholder="6 位验证码" value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
+                <p className="text-sm text-gray-500">{t('account.mfa_disable_verify')}</p>
+                <Input type="password" placeholder={t('account.password')} value={mfaPassword} onChange={e => setMfaPassword(e.target.value)} />
+                <Input placeholder={t('account.mfa_code')} value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
                 {mfaError && <p className="text-red-500 text-sm">{mfaError}</p>}
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { setMfaStep('idle'); setMfaError('') }} className="flex-1">返回</Button>
-                  <Button variant="destructive" onClick={disableMFA} disabled={mfaLoading} className="flex-1">确认关闭</Button>
+                  <Button variant="outline" onClick={() => { setMfaStep('idle'); setMfaError('') }} className="flex-1">{t('account.back')}</Button>
+                  <Button variant="destructive" onClick={disableMFA} disabled={mfaLoading} className="flex-1">{t('account.mfa_confirm_disable')}</Button>
                 </div>
               </div>
             )}

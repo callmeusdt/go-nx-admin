@@ -5,6 +5,7 @@ import { AuditLog } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { DateTimeInput } from '../../components/ui/datetime-input'
+import { useI18n } from '../../contexts/i18n-context'
 
 const pageSize = 20
 
@@ -16,20 +17,25 @@ const methodColors: Record<string, string> = {
 }
 
 export const AuditLogsPage: React.FC = () => {
+  const { t, locale } = useI18n()
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ operator: '', path: '', method: '', ip: '', start: '', end: '' })
 
-  const fetchLogs = useCallback(async (nextPage = page) => {
+  const fetchLogs = useCallback(async (nextPage = page, appliedFilters = filters) => {
+    setLoadFailed(false)
     try {
       const params = new URLSearchParams({ page: String(nextPage), page_size: String(pageSize) })
-      Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
+      Object.entries(appliedFilters).forEach(([key, value]) => value && params.set(key, value))
       const res = await api.get<{ data: AuditLog[]; total: number }>(`/audit-logs?${params.toString()}`)
       setLogs(res.data)
       setTotal(res.total)
       setPage(nextPage)
+    } catch {
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -37,42 +43,43 @@ export const AuditLogsPage: React.FC = () => {
 
   useEffect(() => { fetchLogs(1) }, [])
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">操作日志</h2>
+        <h2 className="text-xl font-bold text-slate-800">{t('audit_logs.title')}</h2>
         <div className="flex items-center gap-2" />
       </div>
+      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
 
-      <div className="grid grid-cols-6 gap-2 rounded-lg border border-gray-200 bg-white p-3">
-        <Input placeholder="操作人" value={filters.operator} onChange={e => setFilters(f => ({ ...f, operator: e.target.value }))} />
-        <Input placeholder="请求路径" value={filters.path} onChange={e => setFilters(f => ({ ...f, path: e.target.value }))} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 rounded-lg border border-gray-200 bg-white p-3">
+        <Input placeholder={t('audit_logs.operator')} value={filters.operator} onChange={e => setFilters(f => ({ ...f, operator: e.target.value }))} />
+        <Input placeholder={t('audit_logs.path')} value={filters.path} onChange={e => setFilters(f => ({ ...f, path: e.target.value }))} />
         <select className="h-10 rounded-md border border-gray-300 px-3 text-sm" value={filters.method} onChange={e => setFilters(f => ({ ...f, method: e.target.value }))}>
-          <option value="">全部方法</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+          <option value="">{t('audit_logs.all_methods')}</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
         </select>
         <Input placeholder="IP" value={filters.ip} onChange={e => setFilters(f => ({ ...f, ip: e.target.value }))} />
-        <DateTimeInput value={filters.start} placeholder="开始时间" onChange={value => setFilters(f => ({ ...f, start: value }))} />
-        <DateTimeInput value={filters.end} placeholder="结束时间" onChange={value => setFilters(f => ({ ...f, end: value }))} />
-        <div className="col-span-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => { setFilters({ operator: '', path: '', method: '', ip: '', start: '', end: '' }); setTimeout(() => fetchLogs(1), 0) }}>重置</Button>
-          <Button onClick={() => fetchLogs(1)}>查询</Button>
+        <DateTimeInput value={filters.start} placeholder={t('logs.start')} onChange={value => setFilters(f => ({ ...f, start: value }))} />
+        <DateTimeInput value={filters.end} placeholder={t('logs.end')} onChange={value => setFilters(f => ({ ...f, end: value }))} />
+        <div className="col-span-full flex justify-end gap-2">
+          <Button variant="outline" onClick={() => { const reset = { operator: '', path: '', method: '', ip: '', start: '', end: '' }; setFilters(reset); void fetchLogs(1, reset) }}>{t('logs.reset')}</Button>
+          <Button onClick={() => fetchLogs(1)}>{t('logs.query')}</Button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">操作人</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">请求路径</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">方法</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('audit_logs.operator')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('audit_logs.path')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.method')}</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">IP</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">耗时</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">时间</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.duration')}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.time')}</th>
             </tr>
           </thead>
           <tbody>
@@ -88,21 +95,21 @@ export const AuditLogsPage: React.FC = () => {
                 </td>
                 <td className="px-4 py-2.5 text-gray-500 text-xs">{log.ip}</td>
                 <td className="px-4 py-2.5 text-gray-500 text-xs">{log.duration}μs</td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(log.created_at).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(log.created_at).toLocaleString(locale)}</td>
               </tr>
             ))}
             {logs.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">暂无操作记录</td></tr>
+              <tr><td colSpan={7} className="text-left px-4 py-8 text-gray-400">{t('audit_logs.empty')}</td></tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between text-sm text-gray-500">
-        <span>共 {total} 条</span>
+      <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
+        <span>{t('logs.total').replace('{total}', String(total))}</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => fetchLogs(page - 1)}>上一页</Button>
-          <span>第 {page} / {totalPages} 页</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => fetchLogs(page + 1)}>下一页</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => fetchLogs(page - 1)}>{t('logs.previous')}</Button>
+          <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => fetchLogs(page + 1)}>{t('logs.next')}</Button>
         </div>
       </div>
     </div>

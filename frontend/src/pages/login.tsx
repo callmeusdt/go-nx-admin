@@ -99,7 +99,7 @@ export const LoginPage: React.FC = () => {
       const data = await res.json()
 
       if (data.captcha_cooldown) {
-        startCooldown(data.captcha_cooldown, data.message || '验证过于频繁，请稍后再试')
+        startCooldown(data.captcha_cooldown, t('login.cooldown'))
         return
       }
 
@@ -129,7 +129,7 @@ export const LoginPage: React.FC = () => {
         }
         return
       }
-      setError(data.message || t('login.error'))
+      setError(t('auth.login_failed'))
     } catch {
       setError(t('login.network_error'))
     } finally {

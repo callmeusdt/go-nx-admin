@@ -2,6 +2,7 @@ import React from 'react'
 import { api } from '../../lib/api'
 import { sessionFetch } from '../../lib/session'
 import { Media } from '../../types'
+import { useI18n } from '../../contexts/i18n-context'
 
 interface UploadProps {
   accept?: string
@@ -13,13 +14,14 @@ interface UploadProps {
 }
 
 export const Upload: React.FC<UploadProps> = ({ accept, maxSize, onSuccess, onError, children, className }) => {
+  const { t } = useI18n()
   const [uploading, setUploading] = React.useState(false)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (maxSize && file.size > maxSize) {
-      onError?.('文件大小超出限制')
+      onError?.(t('upload.too_large'))
       return
     }
     setUploading(true)
@@ -31,14 +33,14 @@ export const Upload: React.FC<UploadProps> = ({ accept, maxSize, onSuccess, onEr
         body: form,
       })
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({ message: '上传失败' }))
-        onError?.(errData.message)
+        await res.json().catch(() => null)
+        onError?.(t('upload.failed'))
         return
       }
       const data = await res.json()
       onSuccess?.(data as Media)
     } catch {
-      onError?.('网络错误')
+      onError?.(t('upload.network_error'))
     } finally {
       setUploading(false)
     }
@@ -47,8 +49,8 @@ export const Upload: React.FC<UploadProps> = ({ accept, maxSize, onSuccess, onEr
 
   return (
     <label className={className || ''}>
-      {children || (uploading ? '上传中...' : '上传文件')}
-      <input type="file" accept={accept} className="hidden" onChange={handleFile} disabled={uploading} />
+      {children || (uploading ? t('upload.uploading') : t('common.upload'))}
+      <input type="file" aria-label={t('common.upload')} accept={accept} className="hidden" onChange={handleFile} disabled={uploading} />
     </label>
   )
 }
