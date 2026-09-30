@@ -44,7 +44,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   useEffect(() => {
     if (!usesCookieSession()) return
     let active = true
-    setState('loading')
+    // Keep the mounted layout during route revalidation; initial state still gates entry.
     void sessionFetch('/api/v1/auth/me').then(async response => {
       if (!response.ok) { if(active)setState('login'); return }
       const user = await response.json()
