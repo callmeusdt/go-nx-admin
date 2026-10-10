@@ -157,7 +157,7 @@ func Seed(db *gorm.DB) error {
 		return err
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte("qwer1234"), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func Seed(db *gorm.DB) error {
 	ensureApiSeeds(db)
 	ensureAdminRoleMenus(db)
 
-	log.Println("seed data created: admin/admin123")
+	log.Println("seed data created: admin/qwer1234 (MFA disabled)")
 	return nil
 }
 
