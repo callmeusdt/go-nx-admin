@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
 import { Pin, RotateCw, X } from 'lucide-react'
@@ -79,15 +79,38 @@ export const TabBar: React.FC = () => {
     return () => document.removeEventListener('click', handler)
   }, [])
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = scrollRef.current?.querySelector<HTMLElement>('[data-active="true"]')
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeKey, tabs.length])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [tabs.length === 0])
+
   if (tabs.length === 0) return null
 
   return (
     <>
       <div className="h-8 bg-white border-b border-gray-200 flex items-stretch overflow-hidden shrink-0">
-        <div className="flex-1 flex items-stretch overflow-x-auto scrollbar-none">
+        <div
+          ref={scrollRef}
+          className="flex-1 min-w-0 h-full flex items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        >
           {tabs.map(tab => (
             <div
               key={tab.key}
+              data-active={activeKey === tab.key}
               onClick={() => handleTabClick(tab.key)}
               onContextMenu={e => handleContextMenu(e, tab.key)}
               className={`flex items-center gap-1 px-2.5 text-xs cursor-pointer border-r border-gray-200 whitespace-nowrap select-none transition-colors shrink-0 ${
