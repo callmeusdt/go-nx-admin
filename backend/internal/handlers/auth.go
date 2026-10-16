@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/middleware"
@@ -597,12 +596,10 @@ func sendCaptchaRequired(c *fiber.Ctx) error {
 	masterB64, _ := capt.GetMasterImage().ToBase64()
 	tileB64, _ := capt.GetTileImage().ToBase64()
 
-	id := uuid.New().String()
-	captchaStore.Store(id, &captchaData{
-		X: block.X, Y: block.Y,
-		Width: block.Width, Height: block.Height,
-		CreatedAt: time.Now(),
-	})
+	id, err := storeCaptcha(block.X, block.Y, block.Width, block.Height)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"message": "captcha generate failed"})
+	}
 	return c.JSON(fiber.Map{
 		"captcha_required": true,
 		"captcha_id":       id,

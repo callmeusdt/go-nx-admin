@@ -37,3 +37,13 @@ upload:
 captcha:
   enabled: true
   padding: 5
+
+# Shared by login rate limiting, captcha and (later) session lookups.
+# memory is per-process; use redis when running more than one instance.
+cache:
+  driver: memory                 # memory / redis
+  redis:
+    addr: 127.0.0.1:6379
+    password: ""
+    db: 0
+    prefix: "nx:"

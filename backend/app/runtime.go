@@ -21,6 +21,7 @@ import (
 	fiberRecover "github.com/gofiber/fiber/v2/middleware/recover"
 	"gorm.io/gorm"
 
+	"go-nx-admin/internal/cache"
 	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
@@ -39,7 +40,16 @@ type RuntimeOptions struct {
 	LogOutput     io.Writer
 	DisableMedia  bool
 	PublicUploads bool
+	// Cache is optional. When nil the runtime creates an in-memory cache and
+	// closes it with the runtime; a supplied cache is owned by the caller.
+	Cache Cache
 }
+
+// Cache is the key/value contract used for rate limits, captchas and sessions.
+type Cache = cache.Cache
+
+// ErrCacheMiss is the error a custom Cache must return for absent keys.
+var ErrCacheMiss = cache.ErrMiss
 
 // Runtime owns the HTTP listener, not the caller's database or signal handling.
 // The legacy handlers retain process-wide settings: only one explicit runtime
@@ -50,6 +60,9 @@ type Runtime struct {
 	previousConfig      *config.Config
 	previousPermissions []PermissionDef
 	previousExpand      func(string) [][]string
+	previousCache       cache.Cache
+	ownedCache          cache.Cache
+	cacheInstalled      bool
 	closeMu             sync.Mutex
 	closeErr            error
 	once                sync.Once
@@ -106,6 +119,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		address: net.JoinHostPort(opts.Config.Server.Host, strconv.Itoa(opts.Config.Server.Port))}
 	defer func() {
 		if recover() != nil {
+			r.restoreCache()
 			config.AppConfig = r.previousConfig
 			models.ExtraPermissionDefs = r.previousPermissions
 			models.ExtraPermissionExpand = r.previousExpand
@@ -122,6 +136,13 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 			return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
 		}})
 	config.AppConfig = &opts.Config
+	if opts.Cache != nil {
+		r.previousCache = cache.Set(opts.Cache)
+	} else {
+		r.ownedCache = cache.NewMemory()
+		r.previousCache = cache.Set(r.ownedCache)
+	}
+	r.cacheInstalled = true
 	models.ExtraPermissionDefs = opts.Extensions.ExtraPermissions
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	r.App.Use(fiberRecover.New())
@@ -152,6 +173,18 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	return r, nil
 }
 
+func (r *Runtime) restoreCache() {
+	if !r.cacheInstalled {
+		return
+	}
+	r.cacheInstalled = false
+	cache.Set(r.previousCache)
+	if r.ownedCache != nil {
+		r.ownedCache.Close()
+		r.ownedCache = nil
+	}
+}
+
 func (r *Runtime) Listen() error { return r.App.Listen(r.address) }
 
 func (r *Runtime) Close(ctx context.Context) error {
@@ -171,6 +204,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 	r.once.Do(func() {
 		runtimeGuard.Lock()
 		defer runtimeGuard.Unlock()
+		r.restoreCache()
 		config.AppConfig = r.previousConfig
 		models.ExtraPermissionDefs = r.previousPermissions
 		models.ExtraPermissionExpand = r.previousExpand

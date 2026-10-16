@@ -17,6 +17,19 @@ type Config struct {
 	Upload   UploadConfig   `yaml:"upload"`
 	Captcha  CaptchaConfig  `yaml:"captcha"`
 	Session  SessionConfig  `yaml:"session"`
+	Cache    CacheConfig    `yaml:"cache"`
+}
+
+type CacheConfig struct {
+	Driver string      `yaml:"driver"` // memory (default) / redis
+	Redis  RedisConfig `yaml:"redis"`
+}
+
+type RedisConfig struct {
+	Addr     string `yaml:"addr"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+	Prefix   string `yaml:"prefix"`
 }
 
 // Cookie is opt-in; existing deployments retain their Bearer transport.
@@ -83,6 +96,7 @@ func Load() *Config {
 		},
 		Upload:  UploadConfig{Dir: "./uploads", MaxSize: 10 * 1024 * 1024},
 		Captcha: CaptchaConfig{Enabled: true, Padding: 5},
+		Cache:   CacheConfig{Driver: "memory", Redis: RedisConfig{Addr: "127.0.0.1:6379", Prefix: "nx:"}},
 	}
 
 	paths := []string{"config.yaml"}
@@ -129,6 +143,19 @@ func Load() *Config {
 	}
 	if v := os.Getenv("NX_UPLOAD_MAX_SIZE"); v != "" {
 		cfg.Upload.MaxSize, _ = strconv.ParseInt(v, 10, 64)
+	}
+
+	if v := os.Getenv("NX_CACHE_DRIVER"); v != "" {
+		cfg.Cache.Driver = v
+	}
+	if v := os.Getenv("NX_REDIS_ADDR"); v != "" {
+		cfg.Cache.Redis.Addr = v
+	}
+	if v := os.Getenv("NX_REDIS_PASSWORD"); v != "" {
+		cfg.Cache.Redis.Password = v
+	}
+	if v := os.Getenv("NX_REDIS_DB"); v != "" {
+		cfg.Cache.Redis.DB, _ = strconv.Atoi(v)
 	}
 
 	AppConfig = cfg

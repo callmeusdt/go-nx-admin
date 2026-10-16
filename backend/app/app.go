@@ -22,6 +22,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"go-nx-admin/internal/cache"
 	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
@@ -43,6 +44,10 @@ func Run(opts Options) {
 	cfg := config.Load()
 	if cfg.Session.Cookie {
 		log.Fatal("cookie sessions require app.NewRuntime with explicit migration and bootstrap")
+	}
+
+	if err := cache.Init(cfg.Cache); err != nil {
+		log.Fatal("cache init error: ", err)
 	}
 
 	dirs := []string{"data", "logs", cfg.Upload.Dir}

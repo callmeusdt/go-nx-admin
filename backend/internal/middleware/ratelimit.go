@@ -1,68 +1,34 @@
 package middleware
 
 import (
-	"sync"
+	"context"
 	"time"
 
+	"go-nx-admin/internal/cache"
 	"go-nx-admin/internal/config"
 )
 
-type attempt struct {
-	Count       int
-	FirstFail   time.Time
-	LockedUntil time.Time
+func rateKeys(id string) (count, lock string) {
+	return "rl:count:" + id, "rl:lock:" + id
 }
 
-var (
-	rateLimitStore = sync.Map{}
-	rateInitOnce   sync.Once
-)
-
-func init() {
-	rateInitOnce.Do(func() {
-		go func() {
-			for {
-				time.Sleep(5 * time.Minute)
-				now := time.Now()
-				rateLimitStore.Range(func(k, v interface{}) bool {
-					a := v.(*attempt)
-					if now.After(a.LockedUntil) && now.Sub(a.FirstFail) > 2*time.Hour {
-						rateLimitStore.Delete(k)
-					}
-					return true
-				})
-			}
-		}()
-	})
-}
-
+// CheckRateLimit reports whether the identity may attempt a login and, when
+// locked, the remaining lock time in minutes.
 func CheckRateLimit(ip string) (bool, int) {
 	cfg := config.AppConfig.Login.RateLimit
 	if !cfg.Enabled {
 		return true, 0
 	}
-	key := "ip:" + ip
-	val, ok := rateLimitStore.Load(key)
-	if !ok {
+	_, lock := rateKeys(ip)
+	ttl, err := cache.Default().TTL(context.Background(), lock)
+	if err != nil {
 		return true, 0
 	}
-	a := val.(*attempt)
-	now := time.Now()
-
-	if now.Before(a.LockedUntil) {
-		remain := int(a.LockedUntil.Sub(now).Minutes())
-		if remain < 1 {
-			remain = 1
-		}
-		return false, remain
+	remain := int((ttl + time.Minute - 1) / time.Minute)
+	if remain < 1 {
+		remain = 1
 	}
-
-	window := time.Duration(cfg.WindowMinutes) * time.Minute
-	if now.After(a.FirstFail.Add(window)) {
-		rateLimitStore.Delete(key)
-		return true, 0
-	}
-	return true, 0
+	return false, remain
 }
 
 func RecordFailedAttempt(ip string) {
@@ -70,17 +36,18 @@ func RecordFailedAttempt(ip string) {
 	if !cfg.Enabled {
 		return
 	}
-	key := "ip:" + ip
-	val, _ := rateLimitStore.LoadOrStore(key, &attempt{
-		FirstFail: time.Now(),
-	})
-	a := val.(*attempt)
-	a.Count++
-	if a.Count >= cfg.MaxAttempts {
-		a.LockedUntil = time.Now().Add(time.Duration(cfg.LockMinutes) * time.Minute)
+	ctx := context.Background()
+	countKey, lockKey := rateKeys(ip)
+	n, err := cache.Default().Incr(ctx, countKey, time.Duration(cfg.WindowMinutes)*time.Minute)
+	if err != nil {
+		return
+	}
+	if int(n) >= cfg.MaxAttempts {
+		cache.Default().Set(ctx, lockKey, []byte("1"), time.Duration(cfg.LockMinutes)*time.Minute)
 	}
 }
 
 func ClearRateLimit(ip string) {
-	rateLimitStore.Delete("ip:" + ip)
+	countKey, lockKey := rateKeys(ip)
+	cache.Default().Del(context.Background(), countKey, lockKey)
 }
