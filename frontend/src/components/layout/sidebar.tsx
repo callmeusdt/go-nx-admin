@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
 import {
@@ -64,6 +64,20 @@ function menuToItems(menus: Menu[]): MenuItem[] {
   }))
 }
 
+// Returns the keys of the groups containing `path`, or null when no menu node
+// has exactly that path. Prefix matches are deliberately not considered: a tab
+// such as /users/5 opened from a row action has no node and must not move the tree.
+export function findMenuAncestors(items: MenuItem[], path: string, trail: string[] = []): string[] | null {
+  for (const item of items) {
+    if (item.key === path) return trail
+    if (item.children?.length) {
+      const found = findMenuAncestors(item.children, path, [...trail, item.key])
+      if (found) return found
+    }
+  }
+  return null
+}
+
 export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const { t, routeLabel } = useI18n()
   const { addTab } = useTabs()
@@ -71,12 +85,25 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const location = useLocation()
   const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenuItems)
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set())
+  const navRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     api.get<{ data: Menu[] }>('/auth/menus')
       .then(res => setMenuItems(menuToItems(res.data)))
       .catch(() => setMenuItems(fallbackMenuItems))
   }, [])
+
+  // Keep the tree in step with the current route (refresh, tab switch, deep link).
+  useEffect(() => {
+    const ancestors = findMenuAncestors(menuItems, location.pathname)
+    if (!ancestors) return
+    if (ancestors.length) {
+      setOpenKeys(prev => ancestors.every(k => prev.has(k)) ? prev : new Set([...prev, ...ancestors]))
+    }
+    requestAnimationFrame(() => {
+      navRef.current?.querySelector('[data-menu-active="true"]')?.scrollIntoView?.({ block: 'nearest' })
+    })
+  }, [location.pathname, menuItems])
 
   const handleMenuClick = (item: MenuItem) => {
     if (item.children?.length) {
@@ -101,6 +128,7 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
       <div key={item.key}>
         <button
           onClick={() => handleMenuClick(item)}
+          data-menu-active={isActive}
           title={collapsed ? routeLabel(item.key, item.label) : undefined}
           aria-label={routeLabel(item.key, item.label)}
           className={`w-full flex items-center rounded-lg text-sm transition-colors ${
@@ -138,7 +166,7 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
           <h1 className="font-bold text-lg w-full px-5 truncate">{t('login.title')}</h1>
         )}
       </div>
-      <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+      <nav ref={navRef} className="flex-1 overflow-y-auto p-2 space-y-1">
         {renderMenu(menuItems)}
       </nav>
     </aside>
