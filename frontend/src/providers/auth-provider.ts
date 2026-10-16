@@ -28,6 +28,7 @@ export const authProvider: AuthProvider = {
     if (res.ok) return { authenticated: true }
 
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
     localStorage.removeItem('username')
     return { authenticated: false, redirectTo: '/login' }
   },

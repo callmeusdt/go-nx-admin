@@ -115,6 +115,11 @@ type OnlineUser struct {
 	UserAgent string    `gorm:"size:255" json:"user_agent"`
 	LoginAt   time.Time `json:"login_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// RefreshHash is the SHA-256 of the opaque refresh token. PrevRefreshHash
+	// remembers the last rotated one so a replay can be detected as token theft.
+	RefreshHash     string    `gorm:"index;size:64" json:"-"`
+	PrevRefreshHash string    `gorm:"index;size:64" json:"-"`
+	RefreshExpires  time.Time `json:"-"`
 }
 
 func (OnlineUser) TableName() string { return "admin_online_users" }

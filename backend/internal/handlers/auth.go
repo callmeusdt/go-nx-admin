@@ -113,17 +113,16 @@ func Login(db *gorm.DB) fiber.Handler {
 			return browserLogin(c, db, user)
 		}
 
-		token, err := middleware.GenerateToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
-		if err != nil {
-			recordLoginLog(db, req.Username, c, "fail", "token generation failed", start)
-			return c.Status(500).JSON(fiber.Map{"message": "token generation failed"})
-		}
-
 		if user.MFAEnabled {
+			mfaToken, err := middleware.GenerateMFAToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
+			if err != nil {
+				recordLoginLog(db, req.Username, c, "fail", "token generation failed", start)
+				return c.Status(500).JSON(fiber.Map{"message": "token generation failed"})
+			}
 			recordLoginLog(db, req.Username, c, "mfa_required", "MFA verification required", start)
 			return c.JSON(fiber.Map{
 				"mfa_required": true,
-				"mfa_token":    token,
+				"mfa_token":    mfaToken,
 				"user": fiber.Map{
 					"id":       user.ID,
 					"username": user.Username,
@@ -132,19 +131,16 @@ func Login(db *gorm.DB) fiber.Handler {
 			})
 		}
 
+		token, refresh, err := createOnlineSession(db, user, c.IP(), c.Get("User-Agent"))
+		if err != nil {
+			recordLoginLog(db, req.Username, c, "fail", "token generation failed", start)
+			return c.Status(500).JSON(fiber.Map{"message": "token generation failed"})
+		}
 		recordLoginLog(db, req.Username, c, "success", "login success", start)
-		db.Create(&models.OnlineUser{
-			UserID:    user.ID,
-			Username:  user.Username,
-			Role:      user.Role.Slug,
-			Token:     token,
-			IP:        c.IP(),
-			UserAgent: c.Get("User-Agent"),
-			LoginAt:   time.Now(),
-		})
 
 		return c.JSON(fiber.Map{
-			"token": token,
+			"token":         token,
+			"refresh_token": refresh,
 			"user": fiber.Map{
 				"id":        user.ID,
 				"username":  user.Username,
@@ -311,7 +307,7 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 			req.MfaToken, _ = c.Locals("token").(string)
 		}
 		claims, err := middleware.ParseToken(req.MfaToken)
-		if err != nil {
+		if err != nil || claims.Purpose != middleware.PurposeMFA {
 			return c.Status(401).JSON(fiber.Map{"message": "invalid or expired mfa token"})
 		}
 		var user models.User
@@ -353,22 +349,14 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 		if err := db.Preload("Role").First(&user, user.ID).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "reload user failed"})
 		}
-		token, err := middleware.GenerateToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
+		token, refresh, err := createOnlineSession(db, user, clientIP(c), c.Get("User-Agent"))
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "token generation failed"})
 		}
 		recordLoginLog(db, username, c, "success", "login success with mfa", start)
-		db.Create(&models.OnlineUser{
-			UserID:    user.ID,
-			Username:  user.Username,
-			Role:      user.Role.Slug,
-			Token:     token,
-			IP:        clientIP(c),
-			UserAgent: c.Get("User-Agent"),
-			LoginAt:   time.Now(),
-		})
 		return c.JSON(fiber.Map{
-			"token": token,
+			"token":         token,
+			"refresh_token": refresh,
 			"user": fiber.Map{
 				"id":        user.ID,
 				"username":  user.Username,
@@ -398,7 +386,7 @@ func MFAGenerateMfaToken(db *gorm.DB) fiber.Handler {
 		if err := db.Preload("Role").First(&user, userID).Error; err != nil {
 			return c.Status(404).JSON(fiber.Map{"message": "user not found"})
 		}
-		token, err := middleware.GenerateToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
+		token, err := middleware.GenerateMFAToken(user.ID, user.Username, user.Role.Slug, user.RoleID)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "token failed"})
 		}

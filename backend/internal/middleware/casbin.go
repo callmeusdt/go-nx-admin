@@ -94,6 +94,7 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 		} else if !strings.HasPrefix(path, "/api/") ||
 			strings.HasSuffix(path, "/login") ||
 			strings.HasSuffix(path, "/captcha") ||
+			strings.HasSuffix(path, "/auth/refresh") ||
 			strings.HasSuffix(path, "/verify-password") ||
 			strings.Contains(path, "/mfa/") {
 			return c.Next()

@@ -10,6 +10,9 @@ database:
 
 jwt:
   secret: nx-admin-jwt-secret-2024
+  access_minutes: 30             # access token lifetime
+  refresh_minutes: 10080         # refresh token lifetime (7 days)
+  mfa_minutes: 5                 # interim token between password and MFA code
 
 cors:
   origins: "*"

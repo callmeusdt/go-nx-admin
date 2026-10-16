@@ -17,6 +17,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api := app.Group("/api/v1", middleware.JWTAuth(db), middleware.CasbinMiddleware(enforcer, db))
 
 	api.Post("/auth/login", handlers.Login(db))
+	api.Post("/auth/refresh", handlers.RefreshToken(db))
 	api.Post("/auth/logout", handlers.Logout(db))
 	api.Post("/auth/verify-password", handlers.VerifyPassword(db))
 	api.Post("/auth/unlock", handlers.Unlock(db))

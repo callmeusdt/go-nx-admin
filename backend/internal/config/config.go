@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,6 +52,35 @@ type DatabaseConfig struct {
 
 type JWTConfig struct {
 	Secret string `yaml:"secret"`
+	// Lifetimes in minutes. Zero falls back to the defaults below.
+	AccessMinutes  int `yaml:"access_minutes"`  // default 30
+	RefreshMinutes int `yaml:"refresh_minutes"` // default 10080 (7 days)
+	MFAMinutes     int `yaml:"mfa_minutes"`     // default 5
+}
+
+const (
+	DefaultAccessMinutes  = 30
+	DefaultRefreshMinutes = 7 * 24 * 60
+	DefaultMFAMinutes     = 5
+)
+
+func minutesOrDefault(v, def int) int {
+	if v > 0 {
+		return v
+	}
+	return def
+}
+
+func (j JWTConfig) AccessTTL() time.Duration {
+	return time.Duration(minutesOrDefault(j.AccessMinutes, DefaultAccessMinutes)) * time.Minute
+}
+
+func (j JWTConfig) RefreshTTL() time.Duration {
+	return time.Duration(minutesOrDefault(j.RefreshMinutes, DefaultRefreshMinutes)) * time.Minute
+}
+
+func (j JWTConfig) MFATTL() time.Duration {
+	return time.Duration(minutesOrDefault(j.MFAMinutes, DefaultMFAMinutes)) * time.Minute
 }
 
 type CORSConfig struct {
@@ -131,6 +161,12 @@ func Load() *Config {
 		cfg.JWT.Secret = v
 	} else if v := os.Getenv("NI" + "UBI_JWT_SECRET"); v != "" {
 		cfg.JWT.Secret = v
+	}
+	if v := os.Getenv("NX_JWT_ACCESS_MINUTES"); v != "" {
+		cfg.JWT.AccessMinutes, _ = strconv.Atoi(v)
+	}
+	if v := os.Getenv("NX_JWT_REFRESH_MINUTES"); v != "" {
+		cfg.JWT.RefreshMinutes, _ = strconv.Atoi(v)
 	}
 	if v := os.Getenv("NX_CORS_ORIGINS"); v != "" {
 		cfg.CORS.Origins = v
