@@ -1,5 +1,7 @@
 export const usersMessages: Record<string, Record<string, string>> = {
   'zh-CN': {
+    'users.must_change_password': '下次登录强制修改密码',
+    'users.must_change_password_hint': '该用户登录后只能修改密码，改完才能使用系统；修改成功后自动取消。',
     'users.username_required': '请输入用户名',
     'users.password_required': '请输入密码',
     'users.ip_required': '请输入 IP 地址',
@@ -40,6 +42,8 @@ export const usersMessages: Record<string, Record<string, string>> = {
     'users.confirm_clear_mfa': '确认清空',
   },
   'en-US': {
+    'users.must_change_password': 'Require password change at next sign-in',
+    'users.must_change_password_hint': 'The user can only change their password after signing in. The requirement is cleared once they do.',
     'users.username_required': 'Enter a username',
     'users.password_required': 'Enter a password',
     'users.ip_required': 'Enter an IP address',
@@ -80,6 +84,8 @@ export const usersMessages: Record<string, Record<string, string>> = {
     'users.confirm_clear_mfa': 'Confirm clear',
   },
   'zh-TW': {
+    'users.must_change_password': '下次登入強制修改密碼',
+    'users.must_change_password_hint': '該使用者登入後只能修改密碼，改完才能使用系統；修改成功後自動取消。',
     'users.username_required': '請輸入使用者名稱',
     'users.password_required': '請輸入密碼',
     'users.ip_required': '請輸入 IP 位址',
@@ -120,6 +126,8 @@ export const usersMessages: Record<string, Record<string, string>> = {
     'users.confirm_clear_mfa': '確認清除',
   },
   es: {
+    'users.must_change_password': 'Exigir cambio de contraseña en el próximo inicio de sesión',
+    'users.must_change_password_hint': 'Tras iniciar sesión, el usuario solo podrá cambiar su contraseña. El requisito se retira cuando lo haga.',
     'users.username_required': 'Introduce un nombre de usuario',
     'users.password_required': 'Introduce una contraseña',
     'users.ip_required': 'Introduce una dirección IP',
@@ -160,6 +168,8 @@ export const usersMessages: Record<string, Record<string, string>> = {
     'users.confirm_clear_mfa': 'Confirmar eliminación',
   },
   vi: {
+    'users.must_change_password': 'Bắt buộc đổi mật khẩu ở lần đăng nhập sau',
+    'users.must_change_password_hint': 'Sau khi đăng nhập, người dùng chỉ có thể đổi mật khẩu. Yêu cầu sẽ được gỡ khi họ đổi xong.',
     'users.username_required': 'Nhập tên người dùng',
     'users.password_required': 'Nhập mật khẩu',
     'users.ip_required': 'Nhập địa chỉ IP',

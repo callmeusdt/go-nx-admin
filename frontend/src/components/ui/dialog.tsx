@@ -10,8 +10,8 @@ export const DialogClose = DialogPrimitive.Close
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
+>(({ className, children, hideClose, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }, ref) => {
   const { t } = useI18n()
   return (
   <DialogPrimitive.Portal>
@@ -25,9 +25,11 @@ export const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close aria-label={t('ui.close')} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
-        <X className="h-4 w-4" />
-      </DialogPrimitive.Close>
+      {!hideClose && (
+        <DialogPrimitive.Close aria-label={t('ui.close')} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+          <X className="h-4 w-4" />
+        </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
 )

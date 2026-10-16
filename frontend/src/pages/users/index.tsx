@@ -18,7 +18,7 @@ export const UsersPage: React.FC = () => {
   const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; user?: User }>({ open: false, mode: 'create' })
   const [delId, setDelId] = useState<number | null>(null)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
-  const [form, setForm] = useState({ username: '', password: '', role_id: 0, status: 1 })
+  const [form, setForm] = useState({ username: '', password: '', role_id: 0, status: 1, must_change_password: false })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [sessionUser, setSessionUser] = useState<User | null>(null)
@@ -51,13 +51,13 @@ export const UsersPage: React.FC = () => {
   })
 
   const openCreate = () => {
-    setForm({ username: '', password: '', role_id: roles[0]?.id || 0, status: 1 })
+    setForm({ username: '', password: '', role_id: roles[0]?.id || 0, status: 1, must_change_password: false })
     setError('')
     setDialog({ open: true, mode: 'create' })
   }
 
   const openEdit = (user: User) => {
-    setForm({ username: user.username, password: '', role_id: user.role_id, status: user.status })
+    setForm({ username: user.username, password: '', role_id: user.role_id, status: user.status, must_change_password: !!user.must_change_password })
     setError('')
     setDialog({ open: true, mode: 'edit', user })
   }
@@ -65,6 +65,7 @@ export const UsersPage: React.FC = () => {
   const handleSave = async () => {
     if (!form.username) { setError(t('users.username_required')); return }
     if (dialog.mode === 'create' && !form.password) { setError(t('users.password_required')); return }
+    if (form.password && (new TextEncoder().encode(form.password).length < 12 || new TextEncoder().encode(form.password).length > 72)) { setError(t('password.policy')); return }
     setSaving(true)
     try {
       if (dialog.mode === 'create') {
@@ -275,6 +276,18 @@ export const UsersPage: React.FC = () => {
                 </select>
               </div>
             )}
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.must_change_password}
+                onChange={e => setForm(f => ({ ...f, must_change_password: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium">{t('users.must_change_password')}</span>
+                <span className="block text-xs text-gray-400">{t('users.must_change_password_hint')}</span>
+              </span>
+            </label>
             {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>

@@ -6,6 +6,7 @@ import { TabBar } from './tabs'
 import { UserMenu } from './user-menu'
 import { GlobalTools } from './global-tools'
 import { LockScreen } from './lock-screen'
+import { PasswordGate } from '../security/force-password-change'
 import { PanelLeftClose, PanelLeft, ChevronRight, Home } from 'lucide-react'
 import { useI18n } from '../../contexts/i18n-context'
 
@@ -45,6 +46,7 @@ export const Layout: React.FC = () => {
     })
 
   return (
+    <PasswordGate>
     <div className="flex h-screen bg-gray-100">
       <Sidebar collapsed={sidebarCollapsed} />
       <div className="flex-1 flex flex-col min-w-0">
@@ -82,5 +84,6 @@ export const Layout: React.FC = () => {
       </div>
       <LockScreen />
     </div>
+    </PasswordGate>
   )
 }

@@ -5,6 +5,7 @@ export interface User {
   role_id: number
   role: Role
   mfa_enabled?: boolean
+  must_change_password?: boolean
   created_at: string
   updated_at?: string
   is_online?: boolean

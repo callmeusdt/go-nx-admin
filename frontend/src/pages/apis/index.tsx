@@ -8,7 +8,7 @@ import { DataTable } from '../../components/ui/data-table'
 import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
 
 const builtinNames: Record<string, [string, string]> = {
-  'GET /api/v1/auth/me': ['当前用户', 'me'], 'PUT /api/v1/auth/profile': ['修改资料', 'profile'],
+  'GET /api/v1/auth/me': ['当前用户', 'me'], 'POST /api/v1/auth/password': ['修改密码', 'password'],
   'POST /api/v1/auth/logout': ['注销登录', 'logout'], 'GET /api/v1/auth/menus': ['我的菜单', 'menus'],
   'GET /api/v1/auth/my-ip': ['我的IP', 'ip'], 'POST /api/v1/auth/mfa/setup': ['配置MFA', 'setup'],
   'POST /api/v1/auth/mfa/enable': ['启用MFA', 'enable'], 'POST /api/v1/auth/mfa/disable': ['关闭MFA', 'disable'],

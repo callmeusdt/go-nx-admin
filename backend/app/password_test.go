@@ -325,3 +325,26 @@ func TestLoginUsesConfiguredClientIPHeaderWiring(t *testing.T) {
 		t.Fatalf("login log IP = %q", log.IP)
 	}
 }
+
+func TestUserListExposesMustChangePassword(t *testing.T) {
+	h := newBearerHarness(t, nil)
+	access, _ := h.login()
+	var me models.User
+	h.db.Where("username = ?", "refresher").First(&me)
+	h.db.Model(&models.User{}).Where("id = ?", me.ID).Update("must_change_password", false)
+	ids := makeUsers(t, h.db, me.RoleID, "pending")
+	h.db.Model(&models.User{}).Where("id = ?", ids[0]).Update("must_change_password", true)
+	_, res := h.do("GET", "/api/v1/users", "", access)
+	flag := map[string]any{}
+	for _, raw := range res["data"].([]any) {
+		u := raw.(map[string]any)
+		v, ok := u["must_change_password"]
+		if !ok {
+			t.Fatalf("list item for %v lacks must_change_password", u["username"])
+		}
+		flag[u["username"].(string)] = v
+	}
+	if flag["pending"] != true || flag["refresher"] != false {
+		t.Fatalf("flags = %v", flag)
+	}
+}

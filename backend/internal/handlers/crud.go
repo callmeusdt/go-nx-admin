@@ -52,15 +52,16 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		data := make([]fiber.Map, 0, len(users))
 		for _, user := range users {
 			item := fiber.Map{
-				"id":          user.ID,
-				"username":    user.Username,
-				"status":      user.Status,
-				"role_id":     user.RoleID,
-				"role":        user.Role,
-				"mfa_enabled": user.MFAEnabled,
-				"created_at":  user.CreatedAt,
-				"updated_at":  user.UpdatedAt,
-				"is_online":   false,
+				"id":                   user.ID,
+				"username":             user.Username,
+				"status":               user.Status,
+				"role_id":              user.RoleID,
+				"role":                 user.Role,
+				"mfa_enabled":          user.MFAEnabled,
+				"must_change_password": user.MustChangePassword,
+				"created_at":           user.CreatedAt,
+				"updated_at":           user.UpdatedAt,
+				"is_online":            false,
 			}
 			if sessions, ok := onlineByUserID[user.ID]; ok && len(sessions) > 0 {
 				latest := sessions[0]

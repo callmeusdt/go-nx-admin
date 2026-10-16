@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '../ui/avatar'
-import { User, Lock, LogOut, Shield, Plus, Trash2, Monitor } from 'lucide-react'
+import { Lock, LogOut, Shield, Plus, Trash2, Monitor } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
@@ -18,14 +18,15 @@ import { api } from '../../lib/api'
 import { sessionFetch, clearSession } from '../../lib/session'
 import { IPWhitelist } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
+import { PasswordForm } from '../security/password-form'
 
 export const UserMenu: React.FC = () => {
   const { t } = useI18n()
   const navigate = useNavigate()
   const { lock } = useLockScreen()
-  const [profileOpen, setProfileOpen] = useState(false)
-  const [mfaOpen, setMfaOpen] = useState(false)
-  const [username, setUsername] = useState(localStorage.getItem('username') || 'Admin')
+  const [securityOpen, setSecurityOpen] = useState(false)
+  const [passwordDone, setPasswordDone] = useState(false)
+  const username = localStorage.getItem('username') || 'Admin'
   const [mfaStep, setMfaStep] = useState<'idle' | 'setup' | 'codes' | 'disable'>('idle')
   const [mfaCode, setMfaCode] = useState('')
   const [mfaPassword, setMfaPassword] = useState('')
@@ -48,8 +49,8 @@ export const UserMenu: React.FC = () => {
   }
 
   useEffect(() => {
-    if (profileOpen) fetchMyWhitelists()
-  }, [profileOpen])
+    if (securityOpen) { fetchMyWhitelists(); fetchMFAStatus(); setPasswordDone(false) }
+  }, [securityOpen])
 
   const addMyIP = async () => {
     if (!myIP) { setMyIPError(t('account.ip_required')); return }
@@ -86,12 +87,7 @@ export const UserMenu: React.FC = () => {
     } catch { /* */ }
   }
 
-  useEffect(() => {
-    if (mfaOpen) fetchMFAStatus()
-  }, [mfaOpen])
-
   const closeMfa = () => {
-    setMfaOpen(false)
     setMfaStep('idle')
     setMfaCode('')
     setMfaPassword('')
@@ -121,6 +117,7 @@ export const UserMenu: React.FC = () => {
     try {
       const res = await api.post<{ recovery_codes: string[] }>('/auth/mfa/enable', { code: mfaCode })
       setRecoveryCodes(res.recovery_codes)
+      setMfaEnabled(true)
       setMfaStep('codes')
     } catch (e: any) {
       setMfaError(t('account.mfa_error'))
@@ -137,6 +134,7 @@ export const UserMenu: React.FC = () => {
     try {
       await api.post('/auth/mfa/disable', { password: mfaPassword, code: mfaCode })
       closeMfa()
+      setMfaEnabled(false)
     } catch (e: any) {
       setMfaError(t('account.mfa_error'))
     } finally {
@@ -169,13 +167,9 @@ export const UserMenu: React.FC = () => {
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuLabel>{t('account.title')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-            <User className="w-4 h-4 mr-2" />
-            {t('account.manage')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setMfaOpen(true)}>
+          <DropdownMenuItem onClick={() => setSecurityOpen(true)}>
             <Shield className="w-4 h-4 mr-2" />
-            {t('account.mfa_settings')}
+            {t('security.title')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={lock}>
             <Lock className="w-4 h-4 mr-2" />
@@ -189,76 +183,27 @@ export const UserMenu: React.FC = () => {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+      <Dialog open={securityOpen} onOpenChange={v => { setSecurityOpen(v); if (!v) closeMfa() }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t('account.manage')}</DialogTitle>
-            <DialogDescription>{t('account.hint')}</DialogDescription>
+            <DialogTitle>{t('security.title')}</DialogTitle>
+            <DialogDescription>{t('security.hint')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('account.username')}</label>
-              <Input
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder={t('account.username_placeholder')}
-              />
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs text-gray-400">{t('account.ip_hint')}</p>
-              <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative min-w-40 flex-1">
-                  <Input placeholder={t('account.ip_placeholder')} value={myIP} onChange={e => setMyIP(e.target.value)} className="pr-9" />
-                  <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title={t('account.current_ip')}>
-                    <Monitor className="w-4 h-4" />
-                  </button>
-                </div>
-                <Input placeholder={t('account.remark')} value={myIPRemark} onChange={e => setMyIPRemark(e.target.value)} className="w-28 shrink-0" />
-                <Button size="sm" aria-label={t('account.add_ip')} onClick={addMyIP}><Plus className="w-4 h-4" /></Button>
-              </div>
-              {myIPError && <p className="text-red-500 text-xs">{myIPError}</p>}
-              {myWhitelists.length > 0 && (
-                <div className="rounded border border-gray-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {myWhitelists.map(rule => (
-                        <tr key={rule.id} className="border-b border-gray-100 last:border-0">
-                          <td className="px-3 py-2"><code className="text-xs">{rule.ip}</code></td>
-                          <td className="px-3 py-2 text-xs text-gray-400">{rule.remark || '-'}</td>
-                          <td className="px-3 py-2">
-                            <button onClick={() => toggleMyIP(rule)} className={`text-xs px-2 py-0.5 rounded-full ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                              {rule.enabled ? t('account.enabled') : t('account.disabled')}
-                            </button>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          <div className="space-y-6 py-2">
+            <section aria-label={t('security.password')} className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700">{t('password.title')}</h3>
+              <p className="text-xs text-gray-400">{t('password.hint')}</p>
+              {passwordDone ? (
+                <p role="status" className="text-sm text-green-600">{t('password.changed')}</p>
+              ) : (
+                <PasswordForm mfaEnabled={mfaEnabled} onChanged={() => setPasswordDone(true)} />
               )}
-            </div>
-            <Button
-              onClick={() => {
-                localStorage.setItem('username', username)
-                setProfileOpen(false)
-              }}
-            >
-              {t('account.save')}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </section>
 
-      <Dialog open={mfaOpen} onOpenChange={v => { if (!v) closeMfa() }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('account.mfa_title')}</DialogTitle>
-            <DialogDescription>{mfaEnabled ? t('account.mfa_enabled') : t('account.mfa_disabled')}</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
+            <section aria-label={t('security.mfa')} className="space-y-3 border-t pt-4">
+              <h3 className="text-sm font-semibold text-slate-700">{t('security.mfa')}</h3>
+              <p className="text-xs text-gray-500">{mfaEnabled ? t('account.mfa_enabled') : t('account.mfa_disabled')}</p>
+              <div>
             {mfaStep === 'idle' && mfaError && <p role="alert" className="text-red-500 text-sm mb-3">{mfaError}</p>}
             {mfaStep === 'idle' && (
               <div className="space-y-3">
@@ -311,6 +256,48 @@ export const UserMenu: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+            </section>
+
+            <section aria-label={t('security.ip')} className="space-y-3 border-t pt-4">
+              <h3 className="text-sm font-semibold text-slate-700">{t('security.ip')}</h3>
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400">{t('account.ip_hint')}</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative min-w-40 flex-1">
+                  <Input placeholder={t('account.ip_placeholder')} value={myIP} onChange={e => setMyIP(e.target.value)} className="pr-9" />
+                  <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title={t('account.current_ip')}>
+                    <Monitor className="w-4 h-4" />
+                  </button>
+                </div>
+                <Input placeholder={t('account.remark')} value={myIPRemark} onChange={e => setMyIPRemark(e.target.value)} className="w-28 shrink-0" />
+                <Button size="sm" aria-label={t('account.add_ip')} onClick={addMyIP}><Plus className="w-4 h-4" /></Button>
+              </div>
+              {myIPError && <p className="text-red-500 text-xs">{myIPError}</p>}
+              {myWhitelists.length > 0 && (
+                <div className="rounded border border-gray-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {myWhitelists.map(rule => (
+                        <tr key={rule.id} className="border-b border-gray-100 last:border-0">
+                          <td className="px-3 py-2"><code className="text-xs">{rule.ip}</code></td>
+                          <td className="px-3 py-2 text-xs text-gray-400">{rule.remark || '-'}</td>
+                          <td className="px-3 py-2">
+                            <button onClick={() => toggleMyIP(rule)} className={`text-xs px-2 py-0.5 rounded-full ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                              {rule.enabled ? t('account.enabled') : t('account.disabled')}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            </section>
           </div>
         </DialogContent>
       </Dialog>
