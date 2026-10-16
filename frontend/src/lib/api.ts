@@ -33,5 +33,5 @@ export const api = {
   get: <T = any>(path: string) => request<T>(path, 'GET'),
   post: <T = any>(path: string, body?: any) => request<T>(path, 'POST', body),
   put: <T = any>(path: string, body?: any) => request<T>(path, 'PUT', body),
-  del: <T = any>(path: string) => request<T>(path, 'DELETE'),
+  del: <T = any>(path: string, body?: any) => request<T>(path, 'DELETE', body),
 }

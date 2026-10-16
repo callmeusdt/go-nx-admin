@@ -6,6 +6,8 @@ import { User, Role, IPWhitelist } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { DataTable } from '../../components/ui/data-table'
+import { useBatch, BatchSummary, batchDelete, batchSetStatus } from '../../hooks/use-batch'
 
 export const UsersPage: React.FC = () => {
   const { t, locale } = useI18n()
@@ -20,6 +22,7 @@ export const UsersPage: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [sessionUser, setSessionUser] = useState<User | null>(null)
+  const [selected, setSelected] = useState<number[]>([])
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -41,6 +44,11 @@ export const UsersPage: React.FC = () => {
   }, [])
 
   useEffect(() => { fetchUsers(); fetchRoles(); fetchCurrentUser() }, [fetchUsers, fetchRoles, fetchCurrentUser])
+
+  const batch = useBatch(succeeded => {
+    setSelected(prev => prev.filter(id => !succeeded.includes(id)))
+    fetchUsers()
+  })
 
   const openCreate = () => {
     setForm({ username: '', password: '', role_id: roles[0]?.id || 0, status: 1 })
@@ -77,6 +85,7 @@ export const UsersPage: React.FC = () => {
     if (!delId) return
     try {
       await api.del(`/users/${delId}`)
+      setSelected(prev => prev.filter(id => id !== delId))
       setDelId(null)
       fetchUsers()
     } catch { /* */ }
@@ -142,8 +151,6 @@ export const UsersPage: React.FC = () => {
     fetchUsers()
   }
 
-  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,86 +159,82 @@ export const UsersPage: React.FC = () => {
       </div>
       {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.username')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.role')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.account_status')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.online_status')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.recent_ip')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('users.created_at')}</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-2.5 text-gray-500">{u.id}</td>
-                <td className="px-4 py-2.5 font-medium">{u.username}</td>
-                <td className="px-4 py-2.5">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
-                    {u.role?.name || '-'}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${u.status === 1 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {u.status === 1 ? t('users.enabled') : t('users.disabled')}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5">
-                  {u.is_online ? (
-                    <button onClick={() => setSessionUser(u)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
-                      <Wifi className="w-3 h-3" />
-                      {t('users.online_count').replace('{count}', String(u.online_session_count || u.online_sessions?.length || 1))}
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-                      <WifiOff className="w-3 h-3" />{t('users.offline')}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5">
-                  <div className="max-w-[220px]">
-                    <div className="font-mono text-xs text-gray-700">{u.online_ip || '-'}</div>
-                    {u.online_user_agent && <div className="mt-0.5 truncate text-[11px] text-gray-400" title={u.online_user_agent}>{u.online_user_agent}</div>}
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(u.created_at).toLocaleDateString(locale)}</td>
-                <td className="px-4 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button aria-label={t('users.edit')} title={t('users.edit')} onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => openIPWhitelist(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600" title={t('users.ip_whitelist')} aria-label={t('users.ip_whitelist')}><Shield className="w-4 h-4" /></button>
-                    <button
-                      onClick={() => u.mfa_enabled && setClearMfaUser(u)}
-                      disabled={!u.mfa_enabled}
-                      className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                      title={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
-                      aria-label={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
-                    >
-                      <ShieldOff className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => currentUserId !== u.id && setDelId(u.id)}
-                      disabled={currentUserId === u.id}
-                      className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
-                      title={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
-                      aria-label={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr><td colSpan={8} className="text-left px-4 py-8 text-gray-400">{t('common.no_data')}</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <BatchSummary text={batch.summary} />
+      <DataTable<User>
+        storageKey="users"
+        rows={users}
+        rowKey={u => u.id}
+        minWidth={900}
+        selectable
+        selectedKeys={selected}
+        onSelectionChange={keys => setSelected(keys as number[])}
+        isRowDisabled={u => u.id === currentUserId}
+        batchActions={({ selectedKeys }) => {
+          const ids = selectedKeys as number[]
+          return (
+            <>
+              <Button size="sm" variant="outline" onClick={() => batch.request({ labelKey: 'batch.enable', confirmKey: 'batch.confirm_enable', ...batchSetStatus('/users/status', 1) }, ids)}>{t('batch.enable')}</Button>
+              <Button size="sm" variant="outline" onClick={() => batch.request({ labelKey: 'batch.disable', confirmKey: 'batch.confirm_disable', destructive: true, ...batchSetStatus('/users/status', 0) }, ids)}>{t('batch.disable')}</Button>
+              <Button size="sm" variant="destructive" onClick={() => batch.request({ labelKey: 'batch.delete', confirmKey: 'batch.confirm_delete', destructive: true, ...batchDelete('/users') }, ids)}>{t('batch.delete')}</Button>
+            </>
+          )
+        }}
+        emptyText={t('common.no_data')}
+        columns={[
+          { key: 'id', title: 'ID', className: 'text-gray-500' },
+          { key: 'username', title: t('users.username'), label: t('users.username'), className: 'font-medium' },
+          { key: 'role', title: t('users.role'), label: t('users.role'), render: u => (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">{u.role?.name || '-'}</span>
+          ) },
+          { key: 'status', title: t('users.account_status'), label: t('users.account_status'), render: u => (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${u.status === 1 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {u.status === 1 ? t('users.enabled') : t('users.disabled')}
+            </span>
+          ) },
+          { key: 'online', title: t('users.online_status'), label: t('users.online_status'), render: u => u.is_online ? (
+            <button onClick={() => setSessionUser(u)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+              <Wifi className="w-3 h-3" />
+              {t('users.online_count').replace('{count}', String(u.online_session_count || u.online_sessions?.length || 1))}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+              <WifiOff className="w-3 h-3" />{t('users.offline')}
+            </span>
+          ) },
+          { key: 'ip', title: t('users.recent_ip'), label: t('users.recent_ip'), render: u => (
+            <div className="max-w-[220px]">
+              <div className="font-mono text-xs text-gray-700">{u.online_ip || '-'}</div>
+              {u.online_user_agent && <div className="mt-0.5 truncate text-[11px] text-gray-400" title={u.online_user_agent}>{u.online_user_agent}</div>}
+            </div>
+          ) },
+          { key: 'created_at', title: t('users.created_at'), label: t('users.created_at'), className: 'text-gray-500 text-xs', render: u => new Date(u.created_at).toLocaleDateString(locale) },
+          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: u => (
+            <div className="flex items-center justify-end gap-1">
+              <button aria-label={t('users.edit')} title={t('users.edit')} onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => openIPWhitelist(u)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600" title={t('users.ip_whitelist')} aria-label={t('users.ip_whitelist')}><Shield className="w-4 h-4" /></button>
+              <button
+                onClick={() => u.mfa_enabled && setClearMfaUser(u)}
+                disabled={!u.mfa_enabled}
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                title={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
+                aria-label={t(u.mfa_enabled ? 'users.clear_mfa' : 'users.mfa_disabled')}
+              >
+                <ShieldOff className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => currentUserId !== u.id && setDelId(u.id)}
+                disabled={currentUserId === u.id}
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                title={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
+                aria-label={t(currentUserId === u.id ? 'users.cannot_delete_self' : 'users.delete')}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) },
+        ]}
+      />
+      {batch.dialog}
 
       <Dialog open={dialog.open} onOpenChange={v => !v && setDialog(p => ({ ...p, open: false }))}>
         <DialogContent className="max-h-[90vh] overflow-y-auto break-words">

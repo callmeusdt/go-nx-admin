@@ -6,6 +6,8 @@ import { Menu, Role } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { DataTable } from '../../components/ui/data-table'
+import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
 
 export const RolesPage: React.FC = () => {
   const { t, routeLabel } = useI18n()
@@ -30,6 +32,7 @@ export const RolesPage: React.FC = () => {
   const [checkedPerms, setCheckedPerms] = useState<Set<string>>(new Set())
   const [rolePerms, setRolePerms] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<number[]>([])
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -43,6 +46,11 @@ export const RolesPage: React.FC = () => {
   }, [])
 
   useEffect(() => { fetchRoles() }, [fetchRoles])
+
+  const batch = useBatch(succeeded => {
+    setSelected(prev => prev.filter(id => !succeeded.includes(id)))
+    fetchRoles()
+  })
 
   const fetchMenus = useCallback(async () => {
     try { const res = await api.get<{ data: Menu[] }>('/menus'); setMenus(res.data) } catch { setLoadFailed(true) }
@@ -84,6 +92,7 @@ export const RolesPage: React.FC = () => {
     if (!delId) return
     try {
       await api.del(`/roles/${delId}`)
+      setSelected(prev => prev.filter(id => id !== delId))
       setDelId(null)
       setDelErr('')
       fetchRoles()
@@ -171,8 +180,6 @@ export const RolesPage: React.FC = () => {
     return acc
   }, {})
 
-  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -181,46 +188,37 @@ export const RolesPage: React.FC = () => {
       </div>
       {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('roles.name')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('roles.slug')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('roles.type')}</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {roles.map(r => (
-              <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-2.5 text-gray-500">{r.id}</td>
-                <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                <td className="px-4 py-2.5"><code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{r.slug}</code></td>
-                <td className="px-4 py-2.5">
-                  {r.is_system ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700"><Shield className="w-3 h-3" />{t('roles.system')}</span>
-                  ) : (
-                    <span className="text-xs text-gray-400">{t('roles.custom')}</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openMenuDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-green-600'}`} title={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')} aria-label={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')}><MenuIcon className="w-4 h-4" /></button>
-                    <button onClick={() => openPolicyDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-purple-600'}`} title={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')} aria-label={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')}><Route className="w-4 h-4" /></button>
-                    <button aria-label={t('roles.edit')} title={t('roles.edit')} onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
-                    <button aria-label={t('common.delete')} title={t('common.delete')} onClick={() => { setDelId(r.id); setDelErr('') }} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {roles.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">{t('common.no_data')}</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <BatchSummary text={batch.summary} />
+      <DataTable<Role>
+        storageKey="roles"
+        rows={roles}
+        rowKey={r => r.id}
+        selectable
+        selectedKeys={selected}
+        onSelectionChange={keys => setSelected(keys as number[])}
+        isRowDisabled={r => r.is_system}
+        batchActions={({ selectedKeys }) => (
+          <Button size="sm" variant="destructive" onClick={() => batch.request({ labelKey: 'batch.delete', confirmKey: 'batch.confirm_delete', destructive: true, ...batchDelete('/roles') }, selectedKeys as number[])}>{t('batch.delete')}</Button>
+        )}
+        emptyText={t('common.no_data')}
+        columns={[
+          { key: 'id', title: 'ID', className: 'text-gray-500' },
+          { key: 'name', title: t('roles.name'), label: t('roles.name'), className: 'font-medium' },
+          { key: 'slug', title: t('roles.slug'), label: t('roles.slug'), render: r => <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{r.slug}</code> },
+          { key: 'type', title: t('roles.type'), label: t('roles.type'), render: r => r.is_system ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700"><Shield className="w-3 h-3" />{t('roles.system')}</span>
+          ) : <span className="text-xs text-gray-400">{t('roles.custom')}</span> },
+          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: r => (
+            <div className="flex items-center justify-end gap-1">
+              <button onClick={() => openMenuDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-green-600'}`} title={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')} aria-label={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')}><MenuIcon className="w-4 h-4" /></button>
+              <button onClick={() => openPolicyDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-purple-600'}`} title={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')} aria-label={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')}><Route className="w-4 h-4" /></button>
+              <button aria-label={t('roles.edit')} title={t('roles.edit')} onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
+              <button aria-label={t('common.delete')} title={t('common.delete')} onClick={() => { setDelId(r.id); setDelErr('') }} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ) },
+        ]}
+      />
+      {batch.dialog}
 
       <Dialog open={dialog.open} onOpenChange={v => !v && setDialog(p => ({ ...p, open: false }))}>
         <DialogContent className="max-h-[90vh] overflow-y-auto break-words">

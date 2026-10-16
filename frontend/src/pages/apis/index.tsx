@@ -4,6 +4,8 @@ import { api } from '../../lib/api'
 import { ApiItem } from '../../types'
 import { Button } from '../../components/ui/button'
 import { useI18n } from '../../contexts/i18n-context'
+import { DataTable } from '../../components/ui/data-table'
+import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
 
 const builtinNames: Record<string, [string, string]> = {
   'GET /api/v1/auth/me': ['当前用户', 'me'], 'PUT /api/v1/auth/profile': ['修改资料', 'profile'],
@@ -21,6 +23,11 @@ export const ApisPage: React.FC = () => {
   const load = () => api.get<{ data: ApiItem[] }>('/apis').then(res => setItems(res.data))
     .catch(() => setError(t('apis.failed'))).finally(() => setLoading(false))
   useEffect(() => { load() }, [])
+  const [selected, setSelected] = useState<number[]>([])
+  const batch = useBatch(succeeded => {
+    setSelected(prev => prev.filter(id => !succeeded.includes(id)))
+    load()
+  })
 
   const create = async () => {
     if (!form.name || !form.path) { setError(t('apis.required')); return }
@@ -55,12 +62,30 @@ export const ApisPage: React.FC = () => {
         <input aria-label={t('apis.description')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('apis.description')} />
         <Button onClick={create}><Plus className="w-4 h-4 mr-1" />{t('common.create')}</Button>
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm"><thead className="bg-gray-50"><tr><th className="text-left px-4 py-3">{t('apis.group')}</th><th className="text-left px-4 py-3">{t('apis.name')}</th><th className="text-left px-4 py-3">{t('apis.path')}</th><th className="text-left px-4 py-3">{t('apis.method')}</th><th className="text-right px-4 py-3">{t('common.actions')}</th></tr></thead><tbody>
-          {items.map(item => <tr key={item.id} className="border-t"><td className="px-4 py-2.5">{groupLabel(item.group)}</td><td className="px-4 py-2.5">{nameLabel(item)}</td><td className="px-4 py-2.5"><code className="text-xs">{item.path}</code></td><td className="px-4 py-2.5"><code className="text-xs">{item.method}</code></td><td className="px-4 py-2.5 text-right"><button aria-label={t('common.delete')} onClick={() => void remove(item.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button></td></tr>)}
-          {!items.length && <tr><td colSpan={5} className="p-4 text-gray-500">{t(loading ? 'common.loading' : 'common.no_data')}</td></tr>}
-        </tbody></table>
-      </div>
+      <BatchSummary text={batch.summary} />
+      <DataTable<ApiItem>
+        storageKey="apis"
+        rows={items}
+        rowKey={i => i.id}
+        loading={loading}
+        selectable
+        selectedKeys={selected}
+        onSelectionChange={keys => setSelected(keys as number[])}
+        batchActions={({ selectedKeys }) => (
+          <Button size="sm" variant="destructive" onClick={() => batch.request({ labelKey: 'batch.delete', confirmKey: 'batch.confirm_delete', destructive: true, ...batchDelete('/apis') }, selectedKeys as number[])}>{t('batch.delete')}</Button>
+        )}
+        emptyText={t('common.no_data')}
+        columns={[
+          { key: 'group', title: t('apis.group'), label: t('apis.group'), render: i => groupLabel(i.group) },
+          { key: 'name', title: t('apis.name'), label: t('apis.name'), render: i => nameLabel(i) },
+          { key: 'path', title: t('apis.path'), label: t('apis.path'), render: i => <code className="text-xs">{i.path}</code> },
+          { key: 'method', title: t('apis.method'), label: t('apis.method'), render: i => <code className="text-xs">{i.method}</code> },
+          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: i => (
+            <button aria-label={t('common.delete')} onClick={() => void remove(i.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+          ) },
+        ]}
+      />
+      {batch.dialog}
     </div>
   )
 }

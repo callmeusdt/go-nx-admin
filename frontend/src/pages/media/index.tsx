@@ -4,6 +4,8 @@ import { api } from '../../lib/api'
 import { sessionFetch } from '../../lib/session'
 import { Media } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
+import { Button } from '../../components/ui/button'
+import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
 
 export const MediaPage: React.FC = () => {
   const { t } = useI18n()
@@ -13,6 +15,7 @@ export const MediaPage: React.FC = () => {
   const [type, setType] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [selected, setSelected] = useState<number[]>([])
   const pageSize = 20
 
   const fetchList = async () => {
@@ -31,6 +34,17 @@ export const MediaPage: React.FC = () => {
   }
 
   useEffect(() => { fetchList() }, [page, type])
+
+  const batch = useBatch(succeeded => {
+    setSelected(prev => prev.filter(id => !succeeded.includes(id)))
+    fetchList()
+  })
+  const toggle = (id: number) => setSelected(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id])
+  const pageIds = items.map(i => i.id)
+  const allOnPage = pageIds.length > 0 && pageIds.every(id => selected.includes(id))
+  const togglePage = () => setSelected(prev => allOnPage
+    ? prev.filter(id => !pageIds.includes(id))
+    : [...prev, ...pageIds.filter(id => !prev.includes(id))])
 
   const handleDelete = async (id: number) => {
     if (!confirm(t('media.delete_hint'))) return
@@ -80,6 +94,22 @@ export const MediaPage: React.FC = () => {
       </div>
 
       {error && <p role="alert" className="text-red-600">{error}</p>}
+      <BatchSummary text={batch.summary} />
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" aria-label={t('table.select_all')} checked={allOnPage} onChange={togglePage} />
+            {t('table.select_all')}
+          </label>
+          {selected.length > 0 && (
+            <>
+              <span>{t('table.selected').replace('{count}', String(selected.length))}</span>
+              <Button size="sm" variant="destructive" onClick={() => batch.request({ labelKey: 'batch.delete', confirmKey: 'batch.confirm_delete', destructive: true, ...batchDelete('/media') }, selected)}>{t('batch.delete')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setSelected([])}>{t('table.clear_selection')}</Button>
+            </>
+          )}
+        </div>
+      )}
       {loading ? (
         <div className="text-center text-slate-400 py-12">{t('common.loading')}</div>
       ) : items.length === 0 ? (
@@ -87,7 +117,8 @@ export const MediaPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {items.map(item => (
-            <div key={item.id} className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden group">
+            <div key={item.id} className={`bg-white rounded-lg border shadow-sm overflow-hidden group relative ${selected.includes(item.id) ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-100'}`}>
+              <input type="checkbox" aria-label={`${t('table.select_row')} ${item.original_name}`} checked={selected.includes(item.id)} onChange={() => toggle(item.id)} className="absolute top-2 left-2 z-10 w-4 h-4" />
               <div className="h-32 bg-slate-100 flex items-center justify-center">
                 {item.type === 'image' ? (
                   <img src={item.url} alt={item.original_name} className="w-full h-full object-cover" />
@@ -107,6 +138,7 @@ export const MediaPage: React.FC = () => {
           ))}
         </div>
       )}
+      {batch.dialog}
 
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
