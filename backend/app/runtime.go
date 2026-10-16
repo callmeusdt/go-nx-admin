@@ -26,6 +26,7 @@ import (
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"go-nx-admin/internal/routes"
+	"go-nx-admin/internal/storage"
 )
 
 // Config is the public configuration surface for explicit runtime construction.
@@ -43,7 +44,17 @@ type RuntimeOptions struct {
 	// Cache is optional. When nil the runtime creates an in-memory cache and
 	// closes it with the runtime; a supplied cache is owned by the caller.
 	Cache Cache
+	// Storage is optional and only used when media is enabled. When nil, the
+	// driver named by Config.Upload is built; local files are served only if
+	// PublicUploads is set. A supplied storage is owned by the caller.
+	Storage Storage
 }
+
+// Storage is the file backend contract (local disk, S3-compatible, or custom).
+type Storage = storage.Storage
+
+// ErrStorageNotFound is the error a custom Storage returns for absent objects.
+var ErrStorageNotFound = storage.ErrNotFound
 
 // Cache is the key/value contract used for rate limits, captchas and sessions.
 type Cache = cache.Cache
@@ -61,6 +72,8 @@ type Runtime struct {
 	previousPermissions []PermissionDef
 	previousExpand      func(string) [][]string
 	previousCache       cache.Cache
+	previousStorage     *storage.Registry
+	storageInstalled    bool
 	ownedCache          cache.Cache
 	cacheInstalled      bool
 	closeMu             sync.Mutex
@@ -119,10 +132,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		address: net.JoinHostPort(opts.Config.Server.Host, strconv.Itoa(opts.Config.Server.Port))}
 	defer func() {
 		if recover() != nil {
-			r.restoreCache()
-			config.AppConfig = r.previousConfig
-			models.ExtraPermissionDefs = r.previousPermissions
-			models.ExtraPermissionExpand = r.previousExpand
+			r.rollbackGlobals()
 			result, resultErr = nil, errors.New("app: runtime construction failed")
 		}
 	}()
@@ -143,6 +153,26 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		r.previousCache = cache.Set(r.ownedCache)
 	}
 	r.cacheInstalled = true
+	if !opts.DisableMedia {
+		var reg *storage.Registry
+		if opts.Storage != nil {
+			// Keep local reachable so files uploaded before the switch still resolve.
+			local, lerr := storage.NewLocal(opts.Config.Upload.Dir, "")
+			if lerr != nil {
+				err = lerr
+			} else {
+				reg = storage.NewRegistry(opts.Storage, local)
+			}
+		} else {
+			reg, err = storage.NewFromConfig(opts.Config.Upload, opts.PublicUploads)
+		}
+		if err != nil {
+			r.rollbackGlobals()
+			return nil, fmt.Errorf("app: storage: %w", err)
+		}
+		r.previousStorage = storage.Set(reg)
+		r.storageInstalled = true
+	}
 	models.ExtraPermissionDefs = opts.Extensions.ExtraPermissions
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	r.App.Use(fiberRecover.New())
@@ -171,6 +201,23 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	}
 	runtimeGuard.active = true
 	return r, nil
+}
+
+// rollbackGlobals puts back every process-wide setting the runtime replaced.
+func (r *Runtime) rollbackGlobals() {
+	r.restoreStorage()
+	r.restoreCache()
+	config.AppConfig = r.previousConfig
+	models.ExtraPermissionDefs = r.previousPermissions
+	models.ExtraPermissionExpand = r.previousExpand
+}
+
+func (r *Runtime) restoreStorage() {
+	if !r.storageInstalled {
+		return
+	}
+	r.storageInstalled = false
+	storage.Set(r.previousStorage)
 }
 
 func (r *Runtime) restoreCache() {
@@ -204,10 +251,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 	r.once.Do(func() {
 		runtimeGuard.Lock()
 		defer runtimeGuard.Unlock()
-		r.restoreCache()
-		config.AppConfig = r.previousConfig
-		models.ExtraPermissionDefs = r.previousPermissions
-		models.ExtraPermissionExpand = r.previousExpand
+		r.rollbackGlobals()
 		runtimeGuard.active = false
 	})
 	return nil

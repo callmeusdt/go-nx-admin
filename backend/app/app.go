@@ -27,6 +27,7 @@ import (
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"go-nx-admin/internal/routes"
+	"go-nx-admin/internal/storage"
 )
 
 type Options struct {
@@ -63,6 +64,12 @@ func Run(opts Options) {
 	}
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
+
+	files, err := storage.NewFromConfig(cfg.Upload, true)
+	if err != nil {
+		log.Fatal("storage init error: ", err)
+	}
+	storage.Set(files)
 
 	var db *gorm.DB
 	switch cfg.Database.Driver {

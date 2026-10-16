@@ -88,11 +88,18 @@ func TestLegacyBearerLoginMFAAndLogout(t *testing.T) {
 }
 
 type bearerHarness struct {
-	t *testing.T
-	r *Runtime
+	t  *testing.T
+	r  *Runtime
+	db *gorm.DB
 }
 
 func newBearerHarness(t *testing.T, mutate func(*RuntimeOptions)) *bearerHarness {
+	return newBearerHarnessSeeded(t, mutate, nil)
+}
+
+// newBearerHarnessSeeded additionally runs seed after the schema exists but
+// before the runtime starts, for tests that need pre-existing rows.
+func newBearerHarnessSeeded(t *testing.T, mutate func(*RuntimeOptions), seed func(*RuntimeOptions)) *bearerHarness {
 	t.Helper()
 	opts := runtimeOptions(t)
 	if mutate != nil {
@@ -100,6 +107,9 @@ func newBearerHarness(t *testing.T, mutate func(*RuntimeOptions)) *bearerHarness
 	}
 	if err := MigrateSchema(opts.DB); err != nil {
 		t.Fatal(err)
+	}
+	if seed != nil {
+		seed(&opts)
 	}
 	role := models.Role{Name: "Admin", Slug: "admin"}
 	if err := opts.DB.Create(&role).Error; err != nil {
@@ -117,7 +127,7 @@ func newBearerHarness(t *testing.T, mutate func(*RuntimeOptions)) *bearerHarness
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { r.Close(context.Background()) })
-	return &bearerHarness{t: t, r: r}
+	return &bearerHarness{t: t, r: r, db: opts.DB}
 }
 
 func (h *bearerHarness) do(method, path, body, token string) (int, map[string]any) {

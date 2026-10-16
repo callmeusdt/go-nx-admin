@@ -15,5 +15,6 @@ type Media struct {
 	Size         int64     `json:"size"`
 	Type         string    `gorm:"size:16;index" json:"type"`
 	CreatedBy    uint      `json:"created_by"`
+	Storage      string    `gorm:"size:16" json:"storage"`
 	CreatedAt    time.Time `json:"created_at"`
 }

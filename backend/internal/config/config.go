@@ -100,8 +100,23 @@ type RateLimitConfig struct {
 }
 
 type UploadConfig struct {
-	Dir     string `yaml:"dir"`
-	MaxSize int64  `yaml:"max_size"`
+	Dir     string   `yaml:"dir"`
+	MaxSize int64    `yaml:"max_size"`
+	Driver  string   `yaml:"driver"` // local (default) / s3
+	S3      S3Config `yaml:"s3"`
+}
+
+// S3Config targets AWS S3 or any S3-compatible service (MinIO, OSS, COS, R2).
+type S3Config struct {
+	Endpoint      string `yaml:"endpoint"` // host[:port], no scheme
+	Region        string `yaml:"region"`
+	Bucket        string `yaml:"bucket"`
+	AccessKey     string `yaml:"access_key"`
+	SecretKey     string `yaml:"secret_key"`
+	UseSSL        bool   `yaml:"use_ssl"`
+	PathStyle     bool   `yaml:"path_style"`
+	Prefix        string `yaml:"prefix"`
+	PublicBaseURL string `yaml:"public_base_url"`
 }
 
 type CaptchaConfig struct {
@@ -176,6 +191,21 @@ func Load() *Config {
 	}
 	if v := os.Getenv("NX_UPLOAD_DIR"); v != "" {
 		cfg.Upload.Dir = v
+	}
+	if v := os.Getenv("NX_UPLOAD_DRIVER"); v != "" {
+		cfg.Upload.Driver = v
+	}
+	if v := os.Getenv("NX_S3_ENDPOINT"); v != "" {
+		cfg.Upload.S3.Endpoint = v
+	}
+	if v := os.Getenv("NX_S3_BUCKET"); v != "" {
+		cfg.Upload.S3.Bucket = v
+	}
+	if v := os.Getenv("NX_S3_ACCESS_KEY"); v != "" {
+		cfg.Upload.S3.AccessKey = v
+	}
+	if v := os.Getenv("NX_S3_SECRET_KEY"); v != "" {
+		cfg.Upload.S3.SecretKey = v
 	}
 	if v := os.Getenv("NX_UPLOAD_MAX_SIZE"); v != "" {
 		cfg.Upload.MaxSize, _ = strconv.ParseInt(v, 10, 64)
