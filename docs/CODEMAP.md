@@ -8,7 +8,6 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 - 前端:`cd frontend && npx tsc --noEmit -p . && npx vite build`
 - 完整构建:`make build`(前端嵌入 `backend/cmd/frontend/dist/`,产物 `nx-admin`);启动 `./nx-admin serve`(会迁移并写种子)。
 - 可选 PostgreSQL 回归:`NX_TEST_DATABASE_DSN` / `NX_TEST_POSTGRES_DSN`。
-- 前端 `check-*.mjs / *.entry.tsx / *.html` 是浏览器验证脚本(Playwright + 临时 Vite),不属于生产构建。
 
 ## 后端
 

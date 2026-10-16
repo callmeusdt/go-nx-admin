@@ -28,7 +28,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 | 仪表盘定制 | `frontend/src/dashboard/`、`createApp({dashboard,homePath})`、`app.Options.DashboardStats` |
 | 配置及默认值 | `config.example.yaml`、`backend/internal/config/config.go` |
 
-表名和端点以模型、路由为准，不在规则中维护第二份全量目录；目录级代码地图见 `docs/CODEMAP.md`，入口、路由、模型、配置或核心流程变化时同步更新。历史演进可参考 `/opt/mgaming/docs/20260612-0700-go-nx-admin-enhancement-plan.md`，旧计划不是当前权限权威规范。
+表名和端点以模型、路由为准，不在规则中维护第二份全量目录；目录级代码地图见 `docs/CODEMAP.md`，入口、路由、模型、配置或核心流程变化时同步更新。
 
 ## 权限维护
 
