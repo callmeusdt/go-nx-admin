@@ -32,6 +32,9 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Post("/auth/mfa/recovery-codes", handlers.MFARecoveryCodes(db))
 	api.Post("/auth/mfa/verify", handlers.MFAVerify(db))
 
+	// Batch routes use the collection path (no :id) so they never shadow /users/:id.
+	api.Delete("/users", handlers.BatchDeleteUsers(db))
+	api.Put("/users/status", handlers.BatchUpdateUserStatus(db))
 	api.Get("/users", handlers.ListUsers(db))
 	api.Post("/users", handlers.CreateUser(db))
 	api.Put("/users/:id", handlers.UpdateUser(db))
@@ -42,6 +45,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Put("/users/:id/ip-whitelists/:wid", handlers.UpdateUserIPWhitelist(db))
 	api.Delete("/users/:id/ip-whitelists/:wid", handlers.DeleteUserIPWhitelist(db))
 
+	api.Delete("/roles", handlers.BatchDeleteRoles(db))
 	api.Get("/roles", handlers.ListRoles(db))
 	api.Post("/roles", handlers.CreateRole(db))
 	api.Put("/roles/:id", handlers.UpdateRole(db))
@@ -58,6 +62,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Put("/menus/:id", handlers.UpdateMenu(db))
 	api.Delete("/menus/:id", handlers.DeleteMenu(db))
 
+	api.Delete("/apis", handlers.BatchDeleteApis(db))
 	api.Get("/apis", handlers.ListApis(db))
 	api.Post("/apis", handlers.CreateApi(db))
 	api.Put("/apis/:id", handlers.UpdateApi(db))
@@ -71,6 +76,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Get("/dashboard/stats", handlers.DashboardStats(db))
 
 	if !disableMedia {
+		api.Delete("/media", handlers.BatchDeleteMedia(db))
 		api.Get("/media", handlers.ListMedia(db))
 		api.Post("/media/upload", handlers.UploadMedia(db))
 		api.Delete("/media/:id", handlers.DeleteMedia(db))

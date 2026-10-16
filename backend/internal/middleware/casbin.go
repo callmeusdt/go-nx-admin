@@ -30,7 +30,43 @@ e = some(where (p.eft == allow))
 m = g(r.sub, p.sub) && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)
 `
 
+// NormalizeLegacyPolicies repairs rules saved as (role, method, path) by older
+// versions of the permission editor, which could never match a request. It is
+// idempotent and only touches rows whose method column holds an HTTP verb and
+// whose path column looks like a path.
+func NormalizeLegacyPolicies(db *gorm.DB) error {
+	const table = "admin_casbin_rule"
+	if !db.Migrator().HasTable(table) {
+		return nil
+	}
+	var rows []struct {
+		ID uint
+		V1 string
+		V2 string
+	}
+	if err := db.Table(table).Select("id, v1, v2").
+		Where("ptype = ? AND v1 IN ?", "p", []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}).
+		Find(&rows).Error; err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, r := range rows {
+			if !strings.HasPrefix(r.V2, "/") {
+				continue
+			}
+			if err := tx.Table(table).Where("id = ?", r.ID).
+				Updates(map[string]any{"v1": r.V2, "v2": r.V1}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func InitCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
+	if err := NormalizeLegacyPolicies(db); err != nil {
+		return nil, err
+	}
 	m, err := model.NewModelFromString(rbacModel)
 	if err != nil {
 		return nil, err

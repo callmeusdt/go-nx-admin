@@ -628,7 +628,9 @@ func ListRolePolicies(e *casbin.Enforcer) fiber.Handler {
 
 func SaveRolePolicies(e *casbin.Enforcer) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		role := c.Params("slug")
+		// Fiber's Params string aliases the request buffer; the enforcer keeps
+		// it in memory after the request ends, so it must be copied.
+		role := strings.Clone(c.Params("slug"))
 		var req struct {
 			Keys     []string   `json:"keys"`
 			Policies [][]string `json:"policies"`
@@ -637,9 +639,18 @@ func SaveRolePolicies(e *casbin.Enforcer) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
 
+		// Raw policies are already (path, method) as the Casbin model expects.
+		// Expanded permissions are (method, path), so flip them before storing;
+		// otherwise the saved rule can never match a request.
 		policies := req.Policies
 		if len(req.Keys) > 0 {
-			policies = models.ExpandPermissionKeys(req.Keys)
+			expanded := models.ExpandPermissionKeys(req.Keys)
+			policies = make([][]string, 0, len(expanded))
+			for _, p := range expanded {
+				if len(p) >= 2 {
+					policies = append(policies, []string{p[1], p[0]})
+				}
+			}
 		}
 
 		e.RemoveFilteredPolicy(0, role)

@@ -84,7 +84,7 @@ func ExpandPermission(key string) [][]string {
 	case "users:edit":
 		return [][]string{{"PUT", "/api/v1/users/.*"}}
 	case "users:delete":
-		return [][]string{{"DELETE", "/api/v1/users/.*"}}
+		return [][]string{{"DELETE", "/api/v1/users/.*"}, {"DELETE", "/api/v1/users"}}
 	case "users:mfa":
 		return [][]string{{"DELETE", "/api/v1/users/.*/mfa"}}
 	case "users:whitelist":
@@ -103,7 +103,7 @@ func ExpandPermission(key string) [][]string {
 	case "roles:edit":
 		return [][]string{{"PUT", "/api/v1/roles/.*"}}
 	case "roles:delete":
-		return [][]string{{"DELETE", "/api/v1/roles/.*"}}
+		return [][]string{{"DELETE", "/api/v1/roles/.*"}, {"DELETE", "/api/v1/roles"}}
 	case "roles:menus":
 		return [][]string{
 			{"GET", "/api/v1/roles/.*/menus"},
@@ -135,7 +135,7 @@ func ExpandPermission(key string) [][]string {
 	case "apis:edit":
 		return [][]string{{"PUT", "/api/v1/apis/.*"}}
 	case "apis:delete":
-		return [][]string{{"DELETE", "/api/v1/apis/.*"}}
+		return [][]string{{"DELETE", "/api/v1/apis/.*"}, {"DELETE", "/api/v1/apis"}}
 
 	// 日志审计
 	case "audit:view":
@@ -155,7 +155,7 @@ func ExpandPermission(key string) [][]string {
 	case "media:upload":
 		return [][]string{{"POST", "/api/v1/media/upload"}}
 	case "media:delete":
-		return [][]string{{"DELETE", "/api/v1/media/.*"}}
+		return [][]string{{"DELETE", "/api/v1/media/.*"}, {"DELETE", "/api/v1/media"}}
 
 	// 系统配置
 	case "config:view":
@@ -191,7 +191,8 @@ func GetGrantedPermissionKeys(rawPolicies [][]string) []string {
 		for _, ep := range expected {
 			found := false
 			for _, rp := range rawPolicies {
-				if len(rp) >= 3 && policyMatch(rp[1], ep[0]) && policyMatch(rp[2], ep[1]) {
+				// Stored rows are (sub, path, method); expansions are (method, path).
+				if len(rp) >= 3 && policyMatch(rp[1], ep[1]) && policyMatch(rp[2], ep[0]) {
 					found = true
 					break
 				}

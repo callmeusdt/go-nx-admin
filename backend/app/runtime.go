@@ -269,5 +269,8 @@ func MigrateSchema(db *gorm.DB, extraModels ...interface{}) error {
 		return err
 	}
 	// The policy table belongs to the schema, but policy seeds remain explicit.
-	return db.Table("admin_casbin_rule").AutoMigrate(&gormadapter.CasbinRule{})
+	if err := db.Table("admin_casbin_rule").AutoMigrate(&gormadapter.CasbinRule{}); err != nil {
+		return err
+	}
+	return middleware.NormalizeLegacyPolicies(db)
 }
