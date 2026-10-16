@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="bull">
+  <rect width="64" height="64" rx="14" fill="#1e293b"/>
+  <path d="M19 25C9 25 3 17 5 7c4 6 9 9 17 10z" fill="#f1f5f9"/>
+  <path d="M45 25c10 0 16-8 14-18-4 6-9 9-17 10z" fill="#f1f5f9"/>
+  <ellipse cx="12" cy="31" rx="8" ry="4.2" transform="rotate(25 12 31)" fill="#d97706"/>
+  <ellipse cx="52" cy="31" rx="8" ry="4.2" transform="rotate(-25 52 31)" fill="#d97706"/>
+  <path d="M20 19q12-6 24 0l3 15q0 9-6 13v4q-9 5-18 0v-4q-6-4-6-13z" fill="#f59e0b"/>
+  <ellipse cx="32" cy="46" rx="10.5" ry="8" fill="#fde68a"/>
+  <ellipse cx="27.5" cy="46" rx="2.2" ry="3" fill="#78350f"/>
+  <ellipse cx="36.5" cy="46" rx="2.2" ry="3" fill="#78350f"/>
+  <circle cx="25" cy="31" r="2.6" fill="#1e293b"/>
+  <circle cx="39" cy="31" r="2.6" fill="#1e293b"/>
+  <circle cx="25.8" cy="30.2" r=".8" fill="#fff"/>
+  <circle cx="39.8" cy="30.2" r=".8" fill="#fff"/>
+  <path d="M26 53.5q6 2.5 12 0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

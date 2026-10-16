@@ -210,6 +210,7 @@ fi
 FRONTEND_DIR="frontend"
 mkdir -p "$FRONTEND_DIR/src/pages"
 mkdir -p "$FRONTEND_DIR/public"
+[ -f "$FRONTEND_DIR/public/favicon.svg" ] || cp "$SCRIPT_DIR/frontend/public/favicon.svg" "$FRONTEND_DIR/public/favicon.svg"
 
 # —— package.json ——
 cat > "$FRONTEND_DIR/package.json" << PKGJSON
@@ -401,6 +402,7 @@ cat > "$FRONTEND_DIR/index.html" << HTML
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>${PROJECT_NAME}</title>
   </head>
   <body>

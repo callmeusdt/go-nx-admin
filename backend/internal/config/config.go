@@ -19,6 +19,14 @@ type Config struct {
 	Captcha  CaptchaConfig  `yaml:"captcha"`
 	Session  SessionConfig  `yaml:"session"`
 	Cache    CacheConfig    `yaml:"cache"`
+	Site     SiteConfig     `yaml:"site"`
+}
+
+// SiteConfig brands the served SPA shell. Empty fields fall back to the
+// built-in title and bull favicon.
+type SiteConfig struct {
+	Title   string `yaml:"title"`
+	Favicon string `yaml:"favicon"` // http(s)/data URL, or a local file path served by the backend
 }
 
 type CacheConfig struct {
@@ -211,6 +219,12 @@ func Load() *Config {
 		cfg.Upload.MaxSize, _ = strconv.ParseInt(v, 10, 64)
 	}
 
+	if v := os.Getenv("NX_SITE_TITLE"); v != "" {
+		cfg.Site.Title = v
+	}
+	if v := os.Getenv("NX_SITE_FAVICON"); v != "" {
+		cfg.Site.Favicon = v
+	}
 	if v := os.Getenv("NX_CACHE_DRIVER"); v != "" {
 		cfg.Cache.Driver = v
 	}

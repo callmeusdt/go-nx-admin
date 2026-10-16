@@ -14,6 +14,10 @@ jwt:
   refresh_minutes: 10080         # refresh token lifetime (7 days)
   mfa_minutes: 5                 # interim token between password and MFA code
 
+site:
+  title: ""                      # browser tab title; empty -> 我的nxadmin
+  favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
+
 cors:
   origins: "*"
 
