@@ -11,6 +11,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
 - 前端通过 `frontend/src/core.tsx` 的 `createApp(opts)` 注入 `extraResources`、`extraRoutes`、`extraRouteLabels`，业务页面留在二开项目自己的 `frontend/src/pages/`。
 - `createApp({i18n:{languages,messages,defaultLocale}})`可选扩展语言列表和文案，不配置仍为原中英。`messages[locale]['login.title']`覆盖登录/侧栏品牌；`routes.<完整路径>`覆盖侧栏/面包屑/页签标题。动态菜单仍以服务端授权为准，翻译不新增菜单权限；业务页使用同一useI18n上下文。
+- 仪表盘：`createApp({dashboard:{widgets,hide,page}, homePath})` 增删/覆盖卡片或整页替换；widget 的 `permission` 只控制显示，数据接口须自行鉴权；后端数字经 `app.Options.DashboardStats` 合并（同名键覆盖内置）。
 - 修改扩展接口前先读上述公开入口；底座升级要保持二开可 import 和 embed 构建边界，不用内部包绕过公开 API。
 
 ## 定向定位
@@ -24,9 +25,10 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 | 权限定义及保存 | 下文“权限维护” |
 | 前端布局、Tabs、锁屏、侧栏 | `frontend/src/components/layout/`、`frontend/src/contexts/` |
 | 页面、通用 UI、数据与认证 | `frontend/src/pages/`、`frontend/src/components/ui/`、`frontend/src/providers/` |
+| 仪表盘定制 | `frontend/src/dashboard/`、`createApp({dashboard,homePath})`、`app.Options.DashboardStats` |
 | 配置及默认值 | `config.example.yaml`、`backend/internal/config/config.go` |
 
-表名和端点以模型、路由为准，不在规则中维护第二份全量目录。历史演进可参考 `/opt/mgaming/docs/20260612-0700-go-nx-admin-enhancement-plan.md`，旧计划不是当前权限权威规范。
+表名和端点以模型、路由为准，不在规则中维护第二份全量目录；目录级代码地图见 `docs/CODEMAP.md`，入口、路由、模型、配置或核心流程变化时同步更新。历史演进可参考 `/opt/mgaming/docs/20260612-0700-go-nx-admin-enhancement-plan.md`，旧计划不是当前权限权威规范。
 
 ## 权限维护
 
