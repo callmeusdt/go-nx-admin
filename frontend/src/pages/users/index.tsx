@@ -65,7 +65,7 @@ export const UsersPage: React.FC = () => {
   const handleSave = async () => {
     if (!form.username) { setError(t('users.username_required')); return }
     if (dialog.mode === 'create' && !form.password) { setError(t('users.password_required')); return }
-    if (form.password && (new TextEncoder().encode(form.password).length < 12 || new TextEncoder().encode(form.password).length > 72)) { setError(t('password.policy')); return }
+    if (form.password && (new TextEncoder().encode(form.password).length < 8 || new TextEncoder().encode(form.password).length > 32)) { setError(t('password.policy')); return }
     setSaving(true)
     try {
       if (dialog.mode === 'create') {

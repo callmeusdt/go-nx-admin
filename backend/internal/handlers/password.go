@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	minPasswordLen = 12
-	maxPasswordLen = 72 // bcrypt silently ignores bytes beyond this
+	minPasswordLen = 8
+	maxPasswordLen = 32
 )
 
-var errPasswordPolicy = errors.New("password must be 12-72 bytes")
+var errPasswordPolicy = errors.New("password must be 8-32 bytes")
 
 // checkPasswordPolicy is shared by every path that sets a password for others
 // or for oneself, so the rule cannot drift between them.

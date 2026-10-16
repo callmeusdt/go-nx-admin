@@ -37,7 +37,7 @@ export const PasswordForm: React.FC<Props> = ({ mfaEnabled, onChanged, onCancel,
     if (busy) return
     setError('')
     if (!oldPassword) { setError(t('password.err_old_required')); return }
-    if (bytes(next) < 12 || bytes(next) > 72) { setError(t('password.policy')); return }
+    if (bytes(next) < 8 || bytes(next) > 32) { setError(t('password.policy')); return }
     if (next !== confirm) { setError(t('password.err_mismatch')); return }
     if (next === oldPassword) { setError(t('password.err_same')); return }
     if (mfaEnabled && !code) { setError(t('account.mfa_required')); return }

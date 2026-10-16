@@ -17,8 +17,8 @@ func BootstrapAdmin(db *gorm.DB, username, password string) error {
 	if db == nil || db.Dialector.Name() != "postgres" {
 		return errors.New("app: bootstrap requires PostgreSQL")
 	}
-	if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$`).MatchString(username) || len(password) < 12 || len(password) > 72 {
-		return errors.New("app: username must be 3-64 account characters and password 12-72 bytes")
+	if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$`).MatchString(username) || len(password) < 8 || len(password) > 32 {
+		return errors.New("app: username must be 3-64 account characters and password 8-32 bytes")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

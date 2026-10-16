@@ -157,7 +157,6 @@ func Seed(db *gorm.DB) error {
 		ensureSystemMenus(db)
 		ensureApiSeeds(db)
 		ensureAdminRoleMenus(db)
-		flagDefaultSeedPassword(db)
 		return nil
 	}
 
@@ -171,11 +170,10 @@ func Seed(db *gorm.DB) error {
 		return err
 	}
 	adminUser := User{
-		Username:           "admin",
-		Password:           string(hashed),
-		Status:             1,
-		RoleID:             adminRole.ID,
-		MustChangePassword: true,
+		Username: "admin",
+		Password: string(hashed),
+		Status:   1,
+		RoleID:   adminRole.ID,
 	}
 	if err := db.Create(&adminUser).Error; err != nil {
 		return err
@@ -210,7 +208,7 @@ func Seed(db *gorm.DB) error {
 	ensureApiSeeds(db)
 	ensureAdminRoleMenus(db)
 
-	log.Println("seed data created: admin/qwer1234 (MFA disabled)")
+	log.Println("seed data created: admin/qwer1234 (MFA disabled); change this password after first sign-in")
 	return nil
 }
 
@@ -286,19 +284,6 @@ func ensureSystemMenus(db *gorm.DB) {
 	}
 	for _, item := range configItems {
 		db.Where("key = ?", item.Key).FirstOrCreate(&SystemConfig{}, item)
-	}
-}
-
-// flagDefaultSeedPassword makes an existing deployment's seed admin change the
-// well-known default password. Only an account that still verifies against it
-// is flagged, so a password someone already chose is never touched.
-func flagDefaultSeedPassword(db *gorm.DB) {
-	var admin User
-	if err := db.Where("username = ? AND must_change_password = ?", "admin", false).First(&admin).Error; err != nil {
-		return
-	}
-	if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("qwer1234")) == nil {
-		db.Model(&admin).Update("must_change_password", true)
 	}
 }
 

@@ -31,7 +31,7 @@ func TestChangePasswordRequiresOldAndFollowsPolicy(t *testing.T) {
 	for name, tc := range map[string]struct{ body, code string }{
 		"wrong old":      {passwordBody("nope-nope-nope-1", goodNewPassword), "OLD_PASSWORD_INCORRECT"},
 		"too short":      {passwordBody(old, "short-1"), "PASSWORD_POLICY"},
-		"too long":       {passwordBody(old, string(make([]byte, 73))), "PASSWORD_POLICY"},
+		"too long":       {passwordBody(old, string(make([]byte, 33))), "PASSWORD_POLICY"},
 		"same as old":    {passwordBody(old, old), "PASSWORD_UNCHANGED"},
 		"missing fields": {`{}`, "PASSWORD_POLICY"},
 	} {
@@ -197,7 +197,7 @@ func TestAdminCanFlagUsersAndPolicyAppliesToCreateAndEdit(t *testing.T) {
 	}
 }
 
-func TestSeedFlagsDefaultAdminPassword(t *testing.T) {
+func TestSeedAdminIsNotForcedToChangePassword(t *testing.T) {
 	opts := runtimeOptions(t)
 	if err := MigrateSchema(opts.DB); err != nil {
 		t.Fatal(err)
@@ -207,23 +207,45 @@ func TestSeedFlagsDefaultAdminPassword(t *testing.T) {
 	}
 	var admin models.User
 	opts.DB.Where("username = ?", "admin").First(&admin)
-	if !admin.MustChangePassword || bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("qwer1234")) != nil {
-		t.Fatalf("fresh seed must keep qwer1234 and be flagged: %+v", admin.MustChangePassword)
+	if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("qwer1234")) != nil {
+		t.Fatal("seed admin must keep the documented default password")
 	}
-	// An upgraded deployment whose admin never changed the default is flagged;
-	// one that already chose its own password is left alone.
-	opts.DB.Model(&admin).Update("must_change_password", false)
-	models.Seed(opts.DB)
-	opts.DB.First(&admin, admin.ID)
-	if !admin.MustChangePassword {
-		t.Fatal("existing default-password admin must be flagged on upgrade")
+	if admin.MustChangePassword {
+		t.Fatal("seed admin must not be forced to change password; operators opt in themselves")
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte("my-own-password-1"), bcrypt.MinCost)
-	opts.DB.Model(&admin).Updates(map[string]any{"password": string(hash), "must_change_password": false})
-	models.Seed(opts.DB)
+	// Re-running the seed on an existing deployment must not flag it either.
+	if err := models.Seed(opts.DB); err != nil {
+		t.Fatal(err)
+	}
 	opts.DB.First(&admin, admin.ID)
 	if admin.MustChangePassword {
-		t.Fatal("a self-chosen password must never be flagged")
+		t.Fatal("a repeated seed must not flag the default admin")
+	}
+}
+
+func TestPasswordPolicyIsEightToThirtyTwoBytes(t *testing.T) {
+	h := newBearerHarness(t, nil)
+	access, _ := h.login()
+	var me models.User
+	h.db.Where("username = ?", "refresher").First(&me)
+
+	cases := []struct {
+		name string
+		pw   string
+		ok   bool
+	}{
+		{"7 bytes", "1234567", false},
+		{"8 bytes", "12345678", true},
+		{"32 bytes", strings.Repeat("a", 32), true},
+		{"33 bytes", strings.Repeat("a", 33), false},
+		{"30 bytes multibyte", strings.Repeat("\u4e2d", 10), true},
+		{"33 bytes multibyte", strings.Repeat("\u4e2d", 11), false},
+	}
+	for i, tc := range cases {
+		c, res := h.do("POST", "/api/v1/users", body(map[string]any{"username": "bound" + itoa(i), "password": tc.pw, "role_id": me.RoleID}), access)
+		if tc.ok && c != 200 || !tc.ok && c != 400 {
+			t.Fatalf("%s: got %d %v", tc.name, c, res)
+		}
 	}
 }
 
