@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useHomePath } from '../dashboard/context'
 import { sessionFetch, rememberLogin, hasPendingMFA, usesCookieSession } from '../lib/session'
 import { useI18n } from '../contexts/i18n-context'
 
@@ -9,6 +10,7 @@ export const MFAVerifyPage: React.FC = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const home = useHomePath()
   const mfaToken = localStorage.getItem('mfa_token')
   const username = localStorage.getItem('mfa_username')
 
@@ -37,7 +39,7 @@ export const MFAVerifyPage: React.FC = () => {
         localStorage.removeItem('mfa_token')
         localStorage.removeItem('mfa_username')
         rememberLogin(data)
-        navigate('/dashboard', { replace: true })
+        navigate(home, { replace: true })
       } else {
         setError(t('mfa.failed'))
       }

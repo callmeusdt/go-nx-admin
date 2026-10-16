@@ -306,6 +306,7 @@ func ensureApiSeeds(db *gorm.DB) {
 	items := []Api{
 		{Group: "认证", Name: "当前用户", Path: "/api/v1/auth/me", Method: "GET"},
 		{Group: "认证", Name: "修改密码", Path: "/api/v1/auth/password", Method: "POST"},
+		{Group: "认证", Name: "我的权限", Path: "/api/v1/auth/permissions", Method: "GET"},
 		{Group: "认证", Name: "注销登录", Path: "/api/v1/auth/logout", Method: "POST"},
 		{Group: "认证", Name: "我的菜单", Path: "/api/v1/auth/menus", Method: "GET"},
 		{Group: "认证", Name: "我的IP", Path: "/api/v1/auth/my-ip", Method: "GET"},

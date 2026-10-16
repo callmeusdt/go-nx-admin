@@ -123,7 +123,7 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 
 		if CookieMode() {
 			switch method + " " + path {
-			case "POST /api/v1/auth/login", "GET /api/v1/auth/captcha", "POST /api/v1/auth/logout", "GET /api/v1/auth/me", "POST /api/v1/auth/verify-password", "POST /api/v1/auth/password", "POST /api/v1/auth/unlock", "POST /api/v1/auth/mfa/verify", "POST /api/v1/auth/mfa/setup", "POST /api/v1/auth/mfa/enable", "POST /api/v1/auth/mfa/disable", "POST /api/v1/auth/mfa/recovery-codes":
+			case "POST /api/v1/auth/login", "GET /api/v1/auth/captcha", "POST /api/v1/auth/logout", "GET /api/v1/auth/me", "GET /api/v1/auth/permissions", "POST /api/v1/auth/verify-password", "POST /api/v1/auth/password", "POST /api/v1/auth/unlock", "POST /api/v1/auth/mfa/verify", "POST /api/v1/auth/mfa/setup", "POST /api/v1/auth/mfa/enable", "POST /api/v1/auth/mfa/disable", "POST /api/v1/auth/mfa/recovery-codes":
 				return c.Next()
 			}
 		} else if !strings.HasPrefix(path, "/api/") ||
@@ -132,6 +132,7 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 			strings.HasSuffix(path, "/auth/refresh") ||
 			strings.HasSuffix(path, "/verify-password") ||
 			path == "/api/v1/auth/password" ||
+			path == "/api/v1/auth/permissions" ||
 			strings.Contains(path, "/mfa/") {
 			return c.Next()
 		}

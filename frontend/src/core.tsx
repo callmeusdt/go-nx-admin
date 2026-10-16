@@ -16,7 +16,9 @@ import { Layout, RouteLabelsContext } from './components/layout'
 import { KeepAliveExcludeContext } from './components/layout/keep-alive'
 import { LoginPage } from './pages/login'
 import { MFAVerifyPage } from './pages/mfa-verify'
-import { DashboardPage } from './pages/dashboard'
+import { DashboardPage } from './dashboard/page'
+import { DashboardOptionsContext, HomePathContext } from './dashboard/context'
+import { DEFAULT_HOME_PATH, type DashboardOptions } from './dashboard/registry'
 import { UsersPage } from './pages/users'
 import { RolesPage } from './pages/roles'
 import { MenusPage } from './pages/menus'
@@ -64,7 +66,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>
 }
 
-const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = [], keepAliveExclude: string[] = []): React.ReactElement[] => {
+const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = [], keepAliveExclude: string[] = [], home: string = DEFAULT_HOME_PATH): React.ReactElement[] => {
   const labels = extraLabels ?? {}
   const builtin = [
     <Route key="/login" path="/login" element={<LoginPage />} />,
@@ -92,8 +94,8 @@ const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<st
       <Route path="/system-config" element={<SystemConfigPage />} />
       {extraRoutes}
     </Route>,
-    <Route key="/" path="/" element={<Navigate to="/dashboard" replace />} />,
-    <Route key="*" path="*" element={<Navigate to="/dashboard" replace />} />,
+    <Route key="/" path="/" element={<Navigate to={home} replace />} />,
+    <Route key="*" path="*" element={<Navigate to={home} replace />} />,
   ]
   return builtin
 }
@@ -107,6 +109,10 @@ export interface CreateAppOptions {
   i18n?: I18nOptions
   /** Exact paths whose page unmounts when its tab is left (realtime/polling pages). Other tabs stay mounted. */
   keepAliveExclude?: string[]
+  /** Dashboard customisation: extra/hidden widgets, or a whole replacement page. */
+  dashboard?: DashboardOptions
+  /** Where sign-in lands and which tab stays pinned. Defaults to /dashboard. */
+  homePath?: string
 }
 
 export function createApp(opts?: CreateAppOptions): React.FC {
@@ -119,6 +125,8 @@ export function createApp(opts?: CreateAppOptions): React.FC {
           <Reauthenticate />
           <LockScreenProvider>
             <TabsProvider>
+              <HomePathContext.Provider value={opts?.homePath ?? DEFAULT_HOME_PATH}>
+              <DashboardOptionsContext.Provider value={opts?.dashboard}>
               <Refine
                 authProvider={authProvider}
                 dataProvider={dataProvider}
@@ -131,9 +139,11 @@ export function createApp(opts?: CreateAppOptions): React.FC {
                 }}
               >
                 <Routes>
-                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources, opts?.keepAliveExclude)}
+                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources, opts?.keepAliveExclude, opts?.homePath)}
                 </Routes>
               </Refine>
+              </DashboardOptionsContext.Provider>
+              </HomePathContext.Provider>
             </TabsProvider>
           </LockScreenProvider>
         </I18nProvider>

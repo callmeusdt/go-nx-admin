@@ -23,6 +23,7 @@ import (
 
 	"go-nx-admin/internal/cache"
 	"go-nx-admin/internal/config"
+	"go-nx-admin/internal/handlers"
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"go-nx-admin/internal/routes"
@@ -70,6 +71,7 @@ type Runtime struct {
 	address             string
 	previousConfig      *config.Config
 	previousPermissions []PermissionDef
+	previousDashboard   handlers.DashboardStatsProvider
 	previousExpand      func(string) [][]string
 	previousCache       cache.Cache
 	previousStorage     *storage.Registry
@@ -128,7 +130,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		output = os.Stdout
 	}
 	r := &Runtime{previousConfig: config.AppConfig,
-		previousPermissions: models.ExtraPermissionDefs, previousExpand: models.ExtraPermissionExpand,
+		previousPermissions: models.ExtraPermissionDefs, previousExpand: models.ExtraPermissionExpand, previousDashboard: handlers.ExtraDashboardStats,
 		address: net.JoinHostPort(opts.Config.Server.Host, strconv.Itoa(opts.Config.Server.Port))}
 	defer func() {
 		if recover() != nil {
@@ -175,6 +177,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	}
 	models.ExtraPermissionDefs = opts.Extensions.ExtraPermissions
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
+	handlers.ExtraDashboardStats = opts.Extensions.DashboardStats
 	r.App.Use(fiberRecover.New())
 	r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins, AllowCredentials: opts.Config.Session.Cookie, AllowHeaders: "Content-Type,Authorization,X-CSRF-Token"}))
 	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "${status} ${method} ${path}\n"}))
@@ -210,6 +213,7 @@ func (r *Runtime) rollbackGlobals() {
 	config.AppConfig = r.previousConfig
 	models.ExtraPermissionDefs = r.previousPermissions
 	models.ExtraPermissionExpand = r.previousExpand
+	handlers.ExtraDashboardStats = r.previousDashboard
 }
 
 func (r *Runtime) restoreStorage() {

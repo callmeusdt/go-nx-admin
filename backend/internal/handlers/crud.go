@@ -698,3 +698,26 @@ func ListRolePermissions(e *casbin.Enforcer) fiber.Handler {
 		})
 	}
 }
+
+// MyPermissions reports the permission keys the caller's own role holds, so the
+// UI can show or hide parts of a page. It only ever describes the caller, and
+// hiding is a convenience: every API still enforces its own policy.
+func MyPermissions(e *casbin.Enforcer) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		role, _ := c.Locals("role").(string)
+		if role == "" {
+			return c.Status(401).JSON(fiber.Map{"message": "unauthorized"})
+		}
+		raw := e.GetFilteredPolicy(0, role)
+		for _, p := range raw {
+			if len(p) >= 3 && p[1] == ".*" && p[2] == ".*" {
+				return c.JSON(fiber.Map{"all": true, "granted": []string{}})
+			}
+		}
+		granted := models.GetGrantedPermissionKeys(raw)
+		if granted == nil {
+			granted = []string{}
+		}
+		return c.JSON(fiber.Map{"all": false, "granted": granted})
+	}
+}

@@ -1,3 +1,5 @@
+import { resetPermissions } from '../dashboard/permissions'
+
 let cookieMode = false
 let pendingMFA = false
 
@@ -12,6 +14,7 @@ export const usesCookieSession = () => cookieMode
 export const hasPendingMFA = () => cookieMode ? pendingMFA : !!localStorage.getItem('mfa_token')
 
 export function rememberLogin(data: { token?: string; refresh_token?: string; mfa_token?: string; mfa_required?: boolean; user: { username: string } }) {
+  resetPermissions()
   pendingMFA = !!data.mfa_required
   localStorage.setItem('username', data.user.username)
   if (cookieMode) return
@@ -26,6 +29,7 @@ export function rememberLogin(data: { token?: string; refresh_token?: string; mf
 }
 
 export function clearSession() {
+  resetPermissions()
   pendingMFA = false
   for (const key of ['auth_token', 'refresh_token', 'mfa_token', 'mfa_username', 'username', 'tabs', 'lock-screen']) localStorage.removeItem(key)
 }

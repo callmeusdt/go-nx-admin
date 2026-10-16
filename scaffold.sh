@@ -99,6 +99,10 @@ func main() {
 		//     if key == "orders:list" { return [][]string{{"GET", "/api/v1/orders"}} }
 		//     return nil
 		// },
+		// 仪表盘数字：与内置数字合并（同名键覆盖），经 GET /dashboard/stats 返回
+		// DashboardStats: func(db *gorm.DB) map[string]any {
+		//     return map[string]any{"open_orders": 17}
+		// },
 	})
 }
 GOMAIN
@@ -432,6 +436,13 @@ const App = createApp({
   // extraRouteLabels: {
   //   '/orders': '订单管理',
   // },
+  // 仪表盘定制：追加/覆盖/隐藏内置卡片，或用 page 整页替换（组件放在 src/pages/dashboard/）
+  // dashboard: {
+  //   widgets: [{ key: 'orders', component: OrdersCard, order: 5, span: 2, permission: 'orders:list' }],
+  //   hide: ['builtin.today-logins'],
+  //   // page: MyDashboard,
+  // },
+  // homePath: '/dashboard',   // 登录后落地页，同时是标签栏固定的首页
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

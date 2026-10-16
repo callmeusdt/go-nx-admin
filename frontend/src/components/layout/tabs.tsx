@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useHomePath } from '../../dashboard/context'
 import { useTabs } from '../../contexts/tabs-context'
 import { Pin, RotateCw, X } from 'lucide-react'
 import { TAB_REFRESH_EVENT } from './keep-alive'
@@ -9,6 +10,7 @@ export const TabBar: React.FC = () => {
   const { routeLabel, t } = useI18n()
   const { tabs, activeKey, removeTab, setActiveKey, closeOthers, closeRight, closeLeft, togglePin } = useTabs()
   const navigate = useNavigate()
+  const home = useHomePath()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: string } | null>(null)
 
   const handleTabClick = (key: string) => {
@@ -26,7 +28,7 @@ export const TabBar: React.FC = () => {
         const newIdx = Math.min(idx, remaining.length - 1)
         navigate(remaining[newIdx].key)
       } else {
-        navigate('/dashboard')
+        navigate(home)
       }
     }
   }
@@ -70,8 +72,8 @@ export const TabBar: React.FC = () => {
   }
 
   const execCloseAll = () => {
-    closeOthers('/dashboard')
-    navigate('/dashboard')
+    closeOthers(home)
+    navigate(home)
     setContextMenu(null)
   }
 

@@ -1,6 +1,7 @@
 import type { AuthProvider } from '@refinedev/core'
 import { sessionFetch, rememberLogin, clearSession } from '../lib/session'
 import { builtinMessage } from '../contexts/i18n-context'
+import { DEFAULT_HOME_PATH } from '../dashboard/registry'
 
 export const authProvider: AuthProvider = {
   login: async ({ username, password }) => {
@@ -15,7 +16,7 @@ export const authProvider: AuthProvider = {
     }
     const data = await res.json()
     rememberLogin(data)
-    return { success: true, redirectTo: data.mfa_required ? '/mfa-verify' : '/dashboard' }
+    return { success: true, redirectTo: data.mfa_required ? '/mfa-verify' : DEFAULT_HOME_PATH }
   },
   logout: async () => {
     const result = await sessionFetch('/api/v1/auth/logout', { method: 'POST' })

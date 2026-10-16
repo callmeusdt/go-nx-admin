@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { SlideCaptchaModal } from '../components/ui/slide-captcha-modal'
 import { useI18n } from '../contexts/i18n-context'
 import { sessionFetch, rememberLogin } from '../lib/session'
+import { useHomePath } from '../dashboard/context'
 
 interface CaptchaInfo {
   id: string
@@ -41,6 +42,7 @@ export const LoginPage: React.FC = () => {
   const [cooldown, setCooldown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval>>()
   const navigate = useNavigate()
+  const home = useHomePath()
   const fp = useRef(fpHash())
 
   useEffect(() => {
@@ -125,7 +127,7 @@ export const LoginPage: React.FC = () => {
         if (data.mfa_required) {
           navigate('/mfa-verify', { replace: true })
         } else {
-          navigate('/dashboard', { replace: true })
+          navigate(home, { replace: true })
         }
         return
       }

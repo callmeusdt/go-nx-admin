@@ -24,6 +24,7 @@ import (
 
 	"go-nx-admin/internal/cache"
 	"go-nx-admin/internal/config"
+	"go-nx-admin/internal/handlers"
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"go-nx-admin/internal/routes"
@@ -37,6 +38,9 @@ type Options struct {
 	AfterMigrate          func(db *gorm.DB)
 	ExtraPermissions      []PermissionDef
 	ExtraPermissionExpand func(string) [][]string
+	// DashboardStats adds or overrides figures returned by GET /dashboard/stats.
+	// Keys are merged over the built-in ones; it runs under dashboard:view.
+	DashboardStats func(db *gorm.DB) map[string]any
 }
 
 type PermissionDef = models.PermissionDef
@@ -135,6 +139,7 @@ func Run(opts Options) {
 
 	models.ExtraPermissionDefs = opts.ExtraPermissions
 	models.ExtraPermissionExpand = opts.ExtraPermissionExpand
+	handlers.ExtraDashboardStats = opts.DashboardStats
 
 	routes.Register(app, db, enforcer, opts.ExtraRoutes)
 	models.AutoDiscoverAPIs(app, db)

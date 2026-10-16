@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
+import { useHomePath } from '../../dashboard/context'
 import {
   ChevronDown,
   ChevronRight,
@@ -82,6 +83,7 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const { t, routeLabel } = useI18n()
   const { addTab } = useTabs()
   const navigate = useNavigate()
+  const home = useHomePath()
   const location = useLocation()
   const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenuItems)
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set())
@@ -115,7 +117,7 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
       return
     }
     if (!item.key.startsWith('/')) return
-    addTab({ key: item.key, label: item.label, icon: item.icon, closable: item.key !== '/dashboard' })
+    addTab({ key: item.key, label: item.label, icon: item.icon, closable: item.key !== home })
     navigate(item.key)
   }
 

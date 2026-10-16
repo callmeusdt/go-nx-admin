@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"go-nx-admin/internal/handlers"
 	"go-nx-admin/internal/middleware"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/pquerna/otp/totp"
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 const goodNewPassword = "a-much-better-pass-1"
@@ -346,5 +348,88 @@ func TestUserListExposesMustChangePassword(t *testing.T) {
 	}
 	if flag["pending"] != true || flag["refresher"] != false {
 		t.Fatalf("flags = %v", flag)
+	}
+}
+
+func TestDashboardStatsMergeAndIsolation(t *testing.T) {
+	var mode string
+	h := newBearerHarness(t, func(o *RuntimeOptions) {
+		o.Extensions.DashboardStats = func(db *gorm.DB) map[string]any {
+			switch mode {
+			case "panic":
+				panic("boom")
+			case "override":
+				return map[string]any{"total_users": 999, "open_orders": 7}
+			}
+			return map[string]any{"open_orders": 7}
+		}
+	})
+	access, _ := h.login()
+	get := func() map[string]any {
+		code, res := h.do("GET", "/api/v1/dashboard/stats", "", access)
+		if code != 200 {
+			t.Fatalf("stats=%d", code)
+		}
+		return res
+	}
+	res := get()
+	if res["open_orders"] != float64(7) || res["total_users"] != float64(1) || res["online_users"] == nil {
+		t.Fatalf("extra figures must be added beside the built-in ones: %v", res)
+	}
+	if _, ok := res["today_api_calls"]; ok {
+		t.Fatal("the dead today_api_calls figure must be gone")
+	}
+	mode = "override"
+	if res = get(); res["total_users"] != float64(999) {
+		t.Fatalf("a provider key must override the built-in value: %v", res)
+	}
+	mode = "panic"
+	if res = get(); res["total_users"] != float64(1) {
+		t.Fatalf("a panicking provider must not break the built-in figures: %v", res)
+	}
+}
+
+func TestDashboardProviderRestoredAfterClose(t *testing.T) {
+	before := handlers.ExtraDashboardStats
+	h := newBearerHarness(t, func(o *RuntimeOptions) {
+		o.Extensions.DashboardStats = func(*gorm.DB) map[string]any { return nil }
+	})
+	if handlers.ExtraDashboardStats == nil {
+		t.Fatal("provider not installed")
+	}
+	if err := h.r.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if (before == nil) != (handlers.ExtraDashboardStats == nil) {
+		t.Fatal("provider leaked past Close")
+	}
+}
+
+func TestMyPermissionsReportsOnlyTheCallersRole(t *testing.T) {
+	h := newBearerHarnessSeeded(t, nil, func(o *RuntimeOptions) {
+		role := models.Role{Name: "Viewer", Slug: "viewer"}
+		o.DB.Create(&role)
+		hash, _ := bcrypt.GenerateFromPassword([]byte("viewer-user-pass-1"), bcrypt.MinCost)
+		o.DB.Create(&models.User{Username: "viewer", Password: string(hash), RoleID: role.ID, Status: 1})
+		// Stored rows are (role, path, method).
+		o.DB.Exec(`INSERT INTO admin_casbin_rule(ptype,v0,v1,v2) VALUES('p','viewer','/api/v1/dashboard/stats','GET')`)
+	})
+	adminToken, _ := h.login()
+	if _, res := h.do("GET", "/api/v1/auth/permissions", "", adminToken); res["all"] != true {
+		t.Fatalf("admin (.* .*) must report all: %v", res)
+	}
+
+	_, login := h.do("POST", "/api/v1/auth/login", `{"username":"viewer","password":"viewer-user-pass-1"}`, "")
+	viewer := login["token"].(string)
+	code, res := h.do("GET", "/api/v1/auth/permissions", "", viewer)
+	if code != 200 || res["all"] != false {
+		t.Fatalf("viewer: %d %v", code, res)
+	}
+	granted := map[string]bool{}
+	for _, k := range res["granted"].([]any) {
+		granted[k.(string)] = true
+	}
+	if !granted["dashboard:view"] || granted["users:list"] {
+		t.Fatalf("viewer must hold dashboard:view only, got %v", granted)
 	}
 }
