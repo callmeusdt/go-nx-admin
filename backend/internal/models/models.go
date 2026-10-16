@@ -11,17 +11,20 @@ import (
 )
 
 type User struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	Username         string    `gorm:"uniqueIndex;size:64;not null" json:"username"`
-	Password         string    `gorm:"size:255;not null" json:"-"`
-	Status           int       `gorm:"default:1" json:"status"`
-	RoleID           uint      `gorm:"not null" json:"role_id"`
-	Role             Role      `gorm:"foreignKey:RoleID" json:"role"`
-	MFAEnabled       bool      `gorm:"default:false" json:"mfa_enabled"`
-	MFASecret        string    `gorm:"size:64" json:"-"`
-	MFARecoveryCodes string    `gorm:"size:1024" json:"-"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               uint   `gorm:"primaryKey" json:"id"`
+	Username         string `gorm:"uniqueIndex;size:64;not null" json:"username"`
+	Password         string `gorm:"size:255;not null" json:"-"`
+	Status           int    `gorm:"default:1" json:"status"`
+	RoleID           uint   `gorm:"not null" json:"role_id"`
+	Role             Role   `gorm:"foreignKey:RoleID" json:"role"`
+	MFAEnabled       bool   `gorm:"default:false" json:"mfa_enabled"`
+	MFASecret        string `gorm:"size:64" json:"-"`
+	MFARecoveryCodes string `gorm:"size:1024" json:"-"`
+	// MustChangePassword confines the account to changing its password at the
+	// next sign-in; it is cleared when the user sets a new one.
+	MustChangePassword bool      `gorm:"default:false" json:"must_change_password"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 func (User) TableName() string { return "admin_users" }
@@ -154,6 +157,7 @@ func Seed(db *gorm.DB) error {
 		ensureSystemMenus(db)
 		ensureApiSeeds(db)
 		ensureAdminRoleMenus(db)
+		flagDefaultSeedPassword(db)
 		return nil
 	}
 
@@ -167,10 +171,11 @@ func Seed(db *gorm.DB) error {
 		return err
 	}
 	adminUser := User{
-		Username: "admin",
-		Password: string(hashed),
-		Status:   1,
-		RoleID:   adminRole.ID,
+		Username:           "admin",
+		Password:           string(hashed),
+		Status:             1,
+		RoleID:             adminRole.ID,
+		MustChangePassword: true,
 	}
 	if err := db.Create(&adminUser).Error; err != nil {
 		return err
@@ -284,10 +289,23 @@ func ensureSystemMenus(db *gorm.DB) {
 	}
 }
 
+// flagDefaultSeedPassword makes an existing deployment's seed admin change the
+// well-known default password. Only an account that still verifies against it
+// is flagged, so a password someone already chose is never touched.
+func flagDefaultSeedPassword(db *gorm.DB) {
+	var admin User
+	if err := db.Where("username = ? AND must_change_password = ?", "admin", false).First(&admin).Error; err != nil {
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("qwer1234")) == nil {
+		db.Model(&admin).Update("must_change_password", true)
+	}
+}
+
 func ensureApiSeeds(db *gorm.DB) {
 	items := []Api{
 		{Group: "认证", Name: "当前用户", Path: "/api/v1/auth/me", Method: "GET"},
-		{Group: "认证", Name: "修改资料", Path: "/api/v1/auth/profile", Method: "PUT"},
+		{Group: "认证", Name: "修改密码", Path: "/api/v1/auth/password", Method: "POST"},
 		{Group: "认证", Name: "注销登录", Path: "/api/v1/auth/logout", Method: "POST"},
 		{Group: "认证", Name: "我的菜单", Path: "/api/v1/auth/menus", Method: "GET"},
 		{Group: "认证", Name: "我的IP", Path: "/api/v1/auth/my-ip", Method: "GET"},
@@ -327,9 +345,9 @@ func AutoDiscoverAPIs(app *fiber.App, db *gorm.DB) {
 				continue
 			}
 			db.Create(&Api{
-				Group: group,
-				Name:  method + " " + path,
-				Path:  path,
+				Group:  group,
+				Name:   method + " " + path,
+				Path:   path,
 				Method: method,
 			})
 		}

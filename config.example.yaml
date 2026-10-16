@@ -1,6 +1,17 @@
 server:
   host: 172.18.0.1
   port: 19500
+  # Client address behind a reverse proxy (Cloudflare -> nginx -> nxadmin).
+  # Headers are read only when the TCP peer is in trusted_proxies, and only the
+  # one named here, so a direct caller can not forge its address.
+  #   trusted_proxies: IPs/CIDRs of your proxy; empty = loopback only.
+  #   client_ip_header: X-Forwarded-For (default) / X-Real-IP / CF-Connecting-IP; "" = ignore headers.
+  # Recommended: nginx real_ip module (set_real_ip_from <Cloudflare ranges>;
+  # real_ip_header CF-Connecting-IP) plus `proxy_set_header X-Real-IP $remote_addr;`,
+  # then set client_ip_header: X-Real-IP. Only trust CF-Connecting-IP directly if the
+  # origin firewall admits Cloudflare ranges alone.
+  trusted_proxies: []
+  client_ip_header: X-Forwarded-For
 
 database:
   driver: sqlite                 # sqlite / mysql / postgres

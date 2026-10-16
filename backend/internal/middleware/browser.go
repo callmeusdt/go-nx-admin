@@ -87,6 +87,9 @@ func BrowserAuth(db *gorm.DB) fiber.Handler {
 				return browserError(c, 403, "MFA_ENROLLMENT_REQUIRED")
 			}
 		}
+		if session.Purpose == "full" && user.MustChangePassword && !passwordChangePaths[method+" "+path] {
+			return passwordChangeRequired(c)
+		}
 		if mutation && session.Purpose == "full" && user.MFAEnabled && !strings.HasPrefix(path, "/api/v1/auth/") {
 			if session.ReauthenticatedAt == nil || time.Since(*session.ReauthenticatedAt) > 5*time.Minute {
 				return browserError(c, 403, "REAUTH_REQUIRED")

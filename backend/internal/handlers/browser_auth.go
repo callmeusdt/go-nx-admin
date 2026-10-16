@@ -30,7 +30,7 @@ func browserLogin(c *fiber.Ctx, db *gorm.DB, user models.User) error {
 	if err != nil {
 		return err
 	}
-	session := models.BrowserSession{UserID: user.ID, TokenHash: middleware.Digest(token), CSRFHash: middleware.Digest(csrf), Purpose: purpose, ExpiresAt: time.Now().Add(ttl), IP: middleware.BrowserIP(c), UserAgent: c.Get("User-Agent")}
+	session := models.BrowserSession{UserID: user.ID, TokenHash: middleware.Digest(token), CSRFHash: middleware.Digest(csrf), Purpose: purpose, ExpiresAt: time.Now().Add(ttl), IP: middleware.ClientIP(c), UserAgent: c.Get("User-Agent")}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var current models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, user.ID).Error; err != nil {

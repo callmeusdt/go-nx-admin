@@ -46,6 +46,14 @@ func JWTAuth(db *gorm.DB) fiber.Handler {
 			}
 		}
 
+		if !isMfaPath {
+			if blocked, err := mustChangeBlocked(db, claims.UserID, c.Method(), c.Path()); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "internal error"})
+			} else if blocked {
+				return passwordChangeRequired(c)
+			}
+		}
+
 		c.Locals("user_id", claims.UserID)
 		c.Locals("username", claims.Username)
 		c.Locals("role", claims.Role)
@@ -53,4 +61,30 @@ func JWTAuth(db *gorm.DB) fiber.Handler {
 		c.Locals("token", tokenStr)
 		return c.Next()
 	}
+}
+
+// passwordChangePaths is everything an account flagged must_change_password may
+// call: enough to learn it is flagged, change the password, lock or sign out.
+var passwordChangePaths = map[string]bool{
+	"GET /api/v1/auth/me":               true,
+	"POST /api/v1/auth/password":        true,
+	"POST /api/v1/auth/logout":          true,
+	"POST /api/v1/auth/refresh":         true,
+	"POST /api/v1/auth/verify-password": true,
+	"POST /api/v1/auth/unlock":          true,
+}
+
+func passwordChangeRequired(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"code": "PASSWORD_CHANGE_REQUIRED", "message": "PASSWORD_CHANGE_REQUIRED"})
+}
+
+func mustChangeBlocked(db *gorm.DB, userID uint, method, path string) (bool, error) {
+	if passwordChangePaths[method+" "+path] {
+		return false, nil
+	}
+	var user models.User
+	if err := db.Select("id", "must_change_password").First(&user, userID).Error; err != nil {
+		return false, err
+	}
+	return user.MustChangePassword, nil
 }

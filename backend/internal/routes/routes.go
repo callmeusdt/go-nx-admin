@@ -22,7 +22,7 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Post("/auth/verify-password", handlers.VerifyPassword(db))
 	api.Post("/auth/unlock", handlers.Unlock(db))
 	api.Get("/auth/me", handlers.Me(db))
-	api.Put("/auth/profile", handlers.UpdateProfile(db))
+	api.Post("/auth/password", handlers.ChangePassword(db))
 	api.Get("/auth/menus", handlers.MyMenus(db))
 	api.Get("/auth/my-ip", handlers.MyIP)
 	api.Get("/auth/captcha", handlers.GenerateCaptcha)

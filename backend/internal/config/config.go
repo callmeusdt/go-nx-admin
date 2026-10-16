@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -51,6 +52,12 @@ type SessionConfig struct {
 type ServerConfig struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
+	// TrustedProxies lists the proxies (IPs or CIDRs) allowed to tell us the
+	// client address. Empty means loopback only.
+	TrustedProxies []string `yaml:"trusted_proxies"`
+	// ClientIPHeader is the one header read when the peer is a trusted proxy:
+	// X-Forwarded-For, X-Real-IP or CF-Connecting-IP. Empty ignores all headers.
+	ClientIPHeader string `yaml:"client_ip_header"`
 }
 
 type DatabaseConfig struct {
@@ -136,7 +143,7 @@ var AppConfig *Config
 
 func Load() *Config {
 	cfg := &Config{
-		Server:   ServerConfig{Host: "172.18.0.1", Port: 19500},
+		Server:   ServerConfig{Host: "172.18.0.1", Port: 19500, ClientIPHeader: "X-Forwarded-For"},
 		Database: DatabaseConfig{Driver: "sqlite", DSN: "data/nx.db"},
 		JWT:      JWTConfig{Secret: "nx-admin-jwt-secret-2024"},
 		CORS:     CORSConfig{Origins: "*"},
@@ -219,6 +226,12 @@ func Load() *Config {
 		cfg.Upload.MaxSize, _ = strconv.ParseInt(v, 10, 64)
 	}
 
+	if v := os.Getenv("NX_TRUSTED_PROXIES"); v != "" {
+		cfg.Server.TrustedProxies = strings.Split(v, ",")
+	}
+	if v, ok := os.LookupEnv("NX_CLIENT_IP_HEADER"); ok {
+		cfg.Server.ClientIPHeader = v
+	}
 	if v := os.Getenv("NX_SITE_TITLE"); v != "" {
 		cfg.Site.Title = v
 	}

@@ -131,7 +131,7 @@ func Login(db *gorm.DB) fiber.Handler {
 			})
 		}
 
-		token, refresh, err := createOnlineSession(db, user, c.IP(), c.Get("User-Agent"))
+		token, refresh, err := createOnlineSession(db, user, clientIP(c), c.Get("User-Agent"))
 		if err != nil {
 			recordLoginLog(db, req.Username, c, "fail", "token generation failed", start)
 			return c.Status(500).JSON(fiber.Map{"message": "token generation failed"})
@@ -418,22 +418,7 @@ func MyIP(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ip": clientIP(c)})
 }
 
-func clientIP(c *fiber.Ctx) string {
-	if middleware.CookieMode() {
-		return middleware.BrowserIP(c)
-	}
-	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP"} {
-		value := strings.TrimSpace(c.Get(header))
-		if value == "" {
-			continue
-		}
-		ip := strings.TrimSpace(strings.Split(value, ",")[0])
-		if net.ParseIP(ip) != nil {
-			return ip
-		}
-	}
-	return c.IP()
-}
+func clientIP(c *fiber.Ctx) string { return middleware.ClientIP(c) }
 
 func resolveIPGeo(ip string) string {
 	parsed := net.ParseIP(ip)
@@ -482,28 +467,13 @@ func Me(db *gorm.DB) fiber.Handler {
 			return c.Status(404).JSON(fiber.Map{"message": "user not found"})
 		}
 		return c.JSON(fiber.Map{
-			"id":          user.ID,
-			"username":    user.Username,
-			"role":        user.Role.Slug,
-			"role_name":   user.Role.Name,
-			"mfa_enabled": user.MFAEnabled,
+			"id":                   user.ID,
+			"username":             user.Username,
+			"role":                 user.Role.Slug,
+			"role_name":            user.Role.Name,
+			"mfa_enabled":          user.MFAEnabled,
+			"must_change_password": user.MustChangePassword,
 		})
-	}
-}
-
-func UpdateProfile(db *gorm.DB) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		userID := c.Locals("user_id").(uint)
-		var req struct {
-			Username string `json:"username"`
-		}
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
-		}
-		if err := db.Model(&models.User{}).Where("id = ?", userID).Update("username", req.Username).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
-		}
-		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }
 

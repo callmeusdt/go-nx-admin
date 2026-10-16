@@ -80,15 +80,22 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 func CreateUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			RoleID   uint   `json:"role_id"`
+			Username           string `json:"username"`
+			Password           string `json:"password"`
+			RoleID             uint   `json:"role_id"`
+			MustChangePassword bool   `json:"must_change_password"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		user := models.User{Username: req.Username, Password: string(hashed), RoleID: req.RoleID, Status: 1}
+		if err := checkPasswordPolicy(req.Password); err != nil {
+			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+		}
+		user := models.User{Username: req.Username, Password: string(hashed), RoleID: req.RoleID, Status: 1, MustChangePassword: req.MustChangePassword}
 		if err := db.Create(&user).Error; err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
 		}
@@ -104,14 +111,26 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			Password string `json:"password,omitempty"`
 			Status   *int   `json:"status"`
 			RoleID   uint   `json:"role_id"`
+			// nil leaves the flag as it is, so clients that do not know about
+			// it can not clear a pending forced change by accident.
+			MustChangePassword *bool `json:"must_change_password"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
 		updates := map[string]interface{}{"username": req.Username, "role_id": req.RoleID}
 		if req.Password != "" {
-			hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			if err := checkPasswordPolicy(req.Password); err != nil {
+				return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			}
+			hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			}
 			updates["password"] = string(hashed)
+		}
+		if req.MustChangePassword != nil {
+			updates["must_change_password"] = *req.MustChangePassword
 		}
 		if req.Status != nil {
 			updates["status"] = *req.Status

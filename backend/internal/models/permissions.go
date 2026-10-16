@@ -15,7 +15,6 @@ var PermissionDefs = []PermissionDef{
 	{Key: "dashboard:view", Name: "查看仪表盘", Group: "仪表盘"},
 
 	{Key: "profile:view", Name: "查看个人信息", Group: "个人中心"},
-	{Key: "profile:edit", Name: "修改个人信息", Group: "个人中心"},
 	{Key: "mfa:manage", Name: "管理MFA验证", Group: "个人中心"},
 
 	{Key: "users:list", Name: "查看用户", Group: "用户管理"},
@@ -64,8 +63,6 @@ func ExpandPermission(key string) [][]string {
 	// 个人中心
 	case "profile:view":
 		return [][]string{{"GET", "/api/v1/auth/me"}}
-	case "profile:edit":
-		return [][]string{{"PUT", "/api/v1/auth/profile"}}
 	case "mfa:manage":
 		return [][]string{
 			{"GET", "/api/v1/auth/my-ip"},
