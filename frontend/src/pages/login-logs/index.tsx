@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/input'
 import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
+import { useOnTabActivate } from '../../components/layout/keep-alive'
 
 const pageSize = 20
 
@@ -52,6 +53,7 @@ export const LoginLogsPage: React.FC = () => {
   }, [filters, page])
 
   useEffect(() => { load(1) }, [])
+  useOnTabActivate(() => { void load(page) })
 
   return (
     <div className="space-y-4">

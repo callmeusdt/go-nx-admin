@@ -13,6 +13,7 @@ import { LockScreenProvider } from './contexts/lock-screen-context'
 import { I18nProvider, useI18n } from './contexts/i18n-context'
 import type { I18nOptions } from './contexts/i18n-context'
 import { Layout, RouteLabelsContext } from './components/layout'
+import { KeepAliveExcludeContext } from './components/layout/keep-alive'
 import { LoginPage } from './pages/login'
 import { MFAVerifyPage } from './pages/mfa-verify'
 import { DashboardPage } from './pages/dashboard'
@@ -63,7 +64,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>
 }
 
-const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = []): React.ReactElement[] => {
+const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = [], keepAliveExclude: string[] = []): React.ReactElement[] => {
   const labels = extraLabels ?? {}
   const builtin = [
     <Route key="/login" path="/login" element={<LoginPage />} />,
@@ -73,7 +74,9 @@ const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<st
       element={
         <ProtectedRoute>
           <RouteLabelsContext.Provider value={labels}>
-            <Layout />
+            <KeepAliveExcludeContext.Provider value={keepAliveExclude}>
+              <Layout />
+            </KeepAliveExcludeContext.Provider>
           </RouteLabelsContext.Provider>
         </ProtectedRoute>
       }
@@ -102,6 +105,8 @@ export interface CreateAppOptions {
   sessionMode?: 'bearer' | 'cookie'
   disabledResources?: string[]
   i18n?: I18nOptions
+  /** Exact paths whose page unmounts when its tab is left (realtime/polling pages). Other tabs stay mounted. */
+  keepAliveExclude?: string[]
 }
 
 export function createApp(opts?: CreateAppOptions): React.FC {
@@ -126,7 +131,7 @@ export function createApp(opts?: CreateAppOptions): React.FC {
                 }}
               >
                 <Routes>
-                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources)}
+                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources, opts?.keepAliveExclude)}
                 </Routes>
               </Refine>
             </TabsProvider>

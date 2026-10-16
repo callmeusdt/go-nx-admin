@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, Shield, Activity } from 'lucide-react'
 import { api } from '../lib/api'
 import { DashboardStats } from '../types'
 import { useI18n } from '../contexts/i18n-context'
+import { useOnTabActivate } from '../components/layout/keep-alive'
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   total_users: Users,
@@ -30,9 +31,9 @@ export const DashboardPage: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
-    api.get<DashboardStats>('/dashboard/stats').then(setStats).catch(() => setFailed(true))
-  }, [])
+  const load = () => api.get<DashboardStats>('/dashboard/stats').then(setStats).catch(() => setFailed(true))
+  useEffect(() => { load() }, [])
+  useOnTabActivate(load)
 
   if (!stats) {
     if (failed) return <p role="alert" className="text-red-600 py-12">{t('ui.request_failed')}</p>

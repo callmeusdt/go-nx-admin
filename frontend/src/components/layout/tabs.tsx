@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
 import { Pin, RotateCw, X } from 'lucide-react'
+import { TAB_REFRESH_EVENT } from './keep-alive'
 import { useI18n } from '../../contexts/i18n-context'
 
 export const TabBar: React.FC = () => {
@@ -57,7 +58,8 @@ export const TabBar: React.FC = () => {
   const execRefresh = () => {
     if (!contextMenu) return
     navigate(contextMenu.key)
-    setTimeout(() => window.dispatchEvent(new Event('tab-refresh')), 0)
+    const key = contextMenu.key
+    setTimeout(() => window.dispatchEvent(new CustomEvent(TAB_REFRESH_EVENT, { detail: key })), 0)
     setContextMenu(null)
   }
 

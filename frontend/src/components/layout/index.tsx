@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { KeepAliveOutlet } from './keep-alive'
 import { Sidebar } from './sidebar'
 import { TabBar } from './tabs'
 import { UserMenu } from './user-menu'
@@ -75,8 +76,8 @@ export const Layout: React.FC = () => {
           </div>
         </header>
         <TabBar />
-        <main className="flex-1 overflow-auto p-3 sm:p-6">
-          <Outlet />
+        <main className="flex-1 min-h-0 overflow-hidden">
+          <KeepAliveOutlet />
         </main>
       </div>
       <LockScreen />

@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/input'
 import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
+import { useOnTabActivate } from '../../components/layout/keep-alive'
 
 const pageSize = 20
 
@@ -42,6 +43,7 @@ export const AuditLogsPage: React.FC = () => {
   }, [filters, page])
 
   useEffect(() => { fetchLogs(1) }, [])
+  useOnTabActivate(() => { void fetchLogs(page) })
 
 
   return (
