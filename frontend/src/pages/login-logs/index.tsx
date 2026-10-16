@@ -4,6 +4,7 @@ import { LoginLog } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { DateTimeInput } from '../../components/ui/datetime-input'
+import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
 
 const pageSize = 20
@@ -51,7 +52,6 @@ export const LoginLogsPage: React.FC = () => {
   }, [filters, page])
 
   useEffect(() => { load(1) }, [])
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="space-y-4">
@@ -60,7 +60,6 @@ export const LoginLogsPage: React.FC = () => {
         <div className="flex items-center gap-2" />
       </div>
       {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
-      {loading && <p role="status">{t('common.loading')}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 rounded-lg border border-gray-200 bg-white p-3">
         <Input placeholder={t('login_logs.username')} value={filters.username} onChange={e => setFilters(f => ({ ...f, username: e.target.value }))} />
         <select className="h-10 rounded-md border border-gray-300 px-3 text-sm" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
@@ -74,20 +73,30 @@ export const LoginLogsPage: React.FC = () => {
           <Button onClick={() => load(1)}>{t('logs.query')}</Button>
         </div>
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm"><thead className="bg-gray-50"><tr><th className="text-left px-4 py-3">{t('login_logs.user')}</th><th className="text-left px-4 py-3">{t('login_logs.status')}</th><th className="text-left px-4 py-3">{t('login_logs.ip_geo')}</th><th className="text-left px-4 py-3">{t('login_logs.message')}</th><th className="text-left px-4 py-3">{t('logs.time')}</th></tr></thead><tbody>
-          {logs.map(log => <tr key={log.id} className="border-t"><td className="px-4 py-2.5">{log.username}</td><td className="px-4 py-2.5"><span className={log.status === 'success' ? 'text-green-600' : 'text-red-600'}>{translated('login_logs.' + log.status, log.status)}</span></td><td className="px-4 py-2.5"><div className="font-mono text-xs">{log.ip || '-'}</div><div className="mt-0.5 text-xs text-gray-500">{log.geo || '-'}</div></td><td className="px-4 py-2.5">{translated('login_logs.reason.' + log.message, log.message)}</td><td className="px-4 py-2.5 text-xs text-gray-500">{new Date(log.created_at).toLocaleString(locale)}</td></tr>)}
-          {!loading && !loadFailed && !logs.length && <tr><td colSpan={5} className="p-4 text-gray-400">{t('common.no_data')}</td></tr>}
-        </tbody></table>
-      </div>
-      <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
-        <span>{t('logs.total').replace('{total}', String(total))}</span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => load(page - 1)}>{t('logs.previous')}</Button>
-          <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => load(page + 1)}>{t('logs.next')}</Button>
-        </div>
-      </div>
+      <DataTable<LoginLog>
+        storageKey="login-logs"
+        rows={logs}
+        rowKey={log => log.id}
+        loading={loading}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={load}
+        emptyText={loadFailed ? '' : t('common.no_data')}
+        columns={[
+          { key: 'username', title: t('login_logs.user'), label: t('login_logs.user') },
+          {
+            key: 'status', title: t('login_logs.status'), label: t('login_logs.status'),
+            render: log => <span className={log.status === 'success' ? 'text-green-600' : 'text-red-600'}>{translated('login_logs.' + log.status, log.status)}</span>,
+          },
+          {
+            key: 'ip', title: t('login_logs.ip_geo'), label: t('login_logs.ip_geo'),
+            render: log => <><div className="font-mono text-xs">{log.ip || '-'}</div><div className="mt-0.5 text-xs text-gray-500">{log.geo || '-'}</div></>,
+          },
+          { key: 'message', title: t('login_logs.message'), label: t('login_logs.message'), render: log => translated('login_logs.reason.' + log.message, log.message) },
+          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-xs text-gray-500', render: log => new Date(log.created_at).toLocaleString(locale) },
+        ]}
+      />
     </div>
   )
 }

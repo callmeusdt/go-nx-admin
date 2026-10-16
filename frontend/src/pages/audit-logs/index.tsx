@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Loader2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { AuditLog } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { DateTimeInput } from '../../components/ui/datetime-input'
+import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
 
 const pageSize = 20
@@ -43,8 +43,6 @@ export const AuditLogsPage: React.FC = () => {
 
   useEffect(() => { fetchLogs(1) }, [])
 
-  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="space-y-4">
@@ -69,49 +67,31 @@ export const AuditLogsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('audit_logs.operator')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('audit_logs.path')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.method')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">IP</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.duration')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('logs.time')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map(log => (
-              <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-2.5 text-gray-500">{log.id}</td>
-                <td className="px-4 py-2.5 font-medium">{log.operator}</td>
-                <td className="px-4 py-2.5 text-xs font-mono text-gray-600">{log.path}</td>
-                <td className="px-4 py-2.5">
-                  <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-mono ${methodColors[log.method] || 'bg-gray-50 text-gray-600'}`}>
-                    {log.method}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{log.ip}</td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{log.duration}μs</td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{new Date(log.created_at).toLocaleString(locale)}</td>
-              </tr>
-            ))}
-            {logs.length === 0 && (
-              <tr><td colSpan={7} className="text-left px-4 py-8 text-gray-400">{t('audit_logs.empty')}</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
-        <span>{t('logs.total').replace('{total}', String(total))}</span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => fetchLogs(page - 1)}>{t('logs.previous')}</Button>
-          <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => fetchLogs(page + 1)}>{t('logs.next')}</Button>
-        </div>
-      </div>
+      <DataTable<AuditLog>
+        storageKey="audit-logs"
+        rows={logs}
+        rowKey={log => log.id}
+        loading={loading}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={fetchLogs}
+        emptyText={t('audit_logs.empty')}
+        columns={[
+          { key: 'id', title: 'ID', className: 'text-gray-500' },
+          { key: 'operator', title: t('audit_logs.operator'), label: t('audit_logs.operator'), className: 'font-medium' },
+          { key: 'path', title: t('audit_logs.path'), label: t('audit_logs.path'), className: 'text-xs font-mono text-gray-600' },
+          {
+            key: 'method', title: t('logs.method'), label: t('logs.method'),
+            render: log => (
+              <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-mono ${methodColors[log.method] || 'bg-gray-50 text-gray-600'}`}>{log.method}</span>
+            ),
+          },
+          { key: 'ip', title: 'IP', className: 'text-gray-500 text-xs' },
+          { key: 'duration', title: t('logs.duration'), label: t('logs.duration'), className: 'text-gray-500 text-xs', render: log => `${log.duration}μs` },
+          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-gray-500 text-xs', render: log => new Date(log.created_at).toLocaleString(locale) },
+        ]}
+      />
     </div>
   )
 }

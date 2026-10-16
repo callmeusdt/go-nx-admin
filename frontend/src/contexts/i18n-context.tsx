@@ -11,6 +11,7 @@ import { accountMessages } from './messages/account'
 import { widgetsMessages } from './messages/widgets'
 import { rolesMessages } from './messages/roles'
 import { permissionMessages } from './messages/permissions'
+import { tableMessages } from './messages/table'
 
 export interface Language { locale: string; label: string; flag?: string }
 export interface I18nOptions {
@@ -27,7 +28,7 @@ const builtinMessages: Record<string, Record<string, string>> = Object.fromEntri
   Object.keys(commonMessages).map(locale => [locale, {
     ...commonMessages[locale], ...authMessages[locale], ...layoutMessages[locale],
     ...accountMessages[locale], ...menusMessages[locale], ...usersMessages[locale],
-    ...logsMessages[locale], ...widgetsMessages[locale], ...rolesMessages[locale], ...permissionMessages[locale], ...mediaConfigMessages[locale], ...apisMessages[locale],
+    ...logsMessages[locale], ...widgetsMessages[locale], ...rolesMessages[locale], ...permissionMessages[locale], ...mediaConfigMessages[locale], ...apisMessages[locale], ...tableMessages[locale],
   }]),
 )
 
