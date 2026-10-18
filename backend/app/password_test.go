@@ -455,3 +455,26 @@ func TestMyPermissionsReportsOnlyTheCallersRole(t *testing.T) {
 		t.Fatalf("viewer must hold dashboard:view only, got %v", granted)
 	}
 }
+
+func TestUpdateUserNeverChangesUsername(t *testing.T) {
+	h := newBearerHarness(t, nil)
+	access, _ := h.login()
+	var me models.User
+	h.db.Where("username = ?", "refresher").First(&me)
+	c, res := h.do("POST", "/api/v1/users", body(map[string]any{"username": "keepname", "password": "created-pass-123", "role_id": me.RoleID}), access)
+	if c != 200 {
+		t.Fatalf("create: %d %v", c, res)
+	}
+	id := int(res["data"].(map[string]any)["id"].(float64))
+	if c, _ := h.do("PUT", "/api/v1/users/"+itoa(id), body(map[string]any{"username": "renamed", "role_id": me.RoleID, "status": 0}), access); c != 200 {
+		t.Fatalf("edit: %d", c)
+	}
+	var u models.User
+	h.db.First(&u, id)
+	if u.Username != "keepname" {
+		t.Fatalf("username must be immutable, got %q", u.Username)
+	}
+	if u.Status != 0 {
+		t.Fatal("other fields must still update")
+	}
+}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { SystemConfig } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
+import { Switch } from '../../components/ui/switch'
 
 const builtinConfigKeys = new Set(['site_name', 'site_logo', 'upload_max_size', 'upload_allow_types'])
 
@@ -73,11 +74,12 @@ export const SystemConfigPage: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1 break-words">{fieldLabel(item)}</label>
                 {item.description && <p className="text-xs text-slate-400 mb-1 break-words">{item.description}</p>}
                 {item.type === 'bool' ? (
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={values[item.key] === 'true'}
-                      onChange={e => setValues(v => ({ ...v, [item.key]: e.target.checked ? 'true' : 'false' }))} />
-                    <span className="text-sm">{values[item.key] === 'true' ? t('system_config.yes') : t('system_config.no')}</span>
-                  </label>
+                  <Switch
+                    checked={values[item.key] === 'true'}
+                    onCheckedChange={on => setValues(v => ({ ...v, [item.key]: on ? 'true' : 'false' }))}
+                    aria-label={fieldLabel(item)}
+                    label={values[item.key] === 'true' ? t('system_config.yes') : t('system_config.no')}
+                  />
                 ) : (
                   <input type={item.type === 'number' ? 'number' : 'text'} value={values[item.key] || ''}
                     onChange={e => setValues(v => ({ ...v, [item.key]: e.target.value }))}

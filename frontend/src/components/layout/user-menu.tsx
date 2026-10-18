@@ -19,6 +19,7 @@ import { sessionFetch, clearSession } from '../../lib/session'
 import { IPWhitelist } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
 import { PasswordForm } from '../security/password-form'
+import { Switch } from '../ui/switch'
 
 export const UserMenu: React.FC = () => {
   const { t } = useI18n()
@@ -283,9 +284,11 @@ export const UserMenu: React.FC = () => {
                           <td className="px-3 py-2"><code className="text-xs">{rule.ip}</code></td>
                           <td className="px-3 py-2 text-xs text-gray-400">{rule.remark || '-'}</td>
                           <td className="px-3 py-2">
-                            <button onClick={() => toggleMyIP(rule)} className={`text-xs px-2 py-0.5 rounded-full ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                              {rule.enabled ? t('account.enabled') : t('account.disabled')}
-                            </button>
+                            <Switch
+                              checked={rule.enabled}
+                              onCheckedChange={() => toggleMyIP(rule)}
+                              aria-label={`${rule.ip} ${rule.enabled ? t('account.enabled') : t('account.disabled')}`}
+                            />
                           </td>
                           <td className="px-3 py-2 text-right">
                             <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>

@@ -119,7 +119,8 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		updates := map[string]interface{}{"username": req.Username, "role_id": req.RoleID}
+		// The username is the account's identity and never changes after creation.
+		updates := map[string]interface{}{"role_id": req.RoleID}
 		if req.Password != "" {
 			if err := checkPasswordPolicy(req.Password); err != nil {
 				return c.Status(400).JSON(fiber.Map{"message": err.Error()})

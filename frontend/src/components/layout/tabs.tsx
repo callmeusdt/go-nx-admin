@@ -20,6 +20,7 @@ export const TabBar: React.FC = () => {
 
   const handleTabClose = (e: React.MouseEvent, key: string) => {
     e.stopPropagation()
+    if (key === home) return
     const idx = tabs.findIndex(t => t.key === key)
     removeTab(key)
     if (activeKey === key) {
@@ -149,7 +150,7 @@ export const TabBar: React.FC = () => {
           <button onClick={execCloseLeft} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_left')}</button>
           <button onClick={execCloseRight} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_right')}</button>
           <button onClick={execRefresh} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"><RotateCw className="inline w-3 h-3 mr-1" />{t('tabs.refresh')}</button>
-          <button onClick={execTogglePin} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.toggle_pin')}</button>
+          {contextMenu.key !== home && <button onClick={execTogglePin} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.toggle_pin')}</button>}
           <button onClick={execCloseAll} className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">{t('tabs.close_all')}</button>
         </div>
       )}

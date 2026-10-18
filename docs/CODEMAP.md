@@ -38,6 +38,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `auth.go` | 登录(密码→MFA 临时令牌→正式令牌)、`Me`、MFA、登出、IP 白名单检查 |
 | `refresh.go` | `POST /auth/refresh`:不透明 refresh token 原地轮换;10s 宽限(多标签竞态),宽限外重放则吊销会话 |
+| `crud.go` 的 `UpdateUser` | 用户名创建后不可变:更新接口忽略请求里的 `username`,前端编辑框为 `readOnly` |
 | `password.go` | `POST /auth/password`:旧密码(+MFA 开启时 TOTP)、`checkPasswordPolicy`(8–32 字节且不同于旧密码)、登录限流、**不踢会话**、成功后清 `must_change_password` |
 | `batch.go` | 批量删除/改状态:逐 id 结果(`deleted`/`updated`/`failed[]`),自身与系统角色跳过并给原因,不是全成或全败 |
 | `crud.go` | 用户/角色/菜单/API/日志/在线用户 CRUD;`ListRolePermissions`、`MyMenus`、**`MyPermissions`**(仅返回调用者自己角色的权限键;`all:true` 表示超级角色) |
@@ -58,12 +59,13 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**;`buildRoutes` 装配所有页面 |
 | `dashboard/` | **仪表盘定制**,见下节 |
-| `components/layout/` | `index.tsx` 外壳;`sidebar.tsx`(随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单);`tabs.tsx`(横向溢出不撑高);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
+| `components/layout/` | `index.tsx` 外壳;`sidebar.tsx`(随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单);`tabs.tsx`(横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
+| `components/ui/switch.tsx` | 公共开关 `Switch`(`checked`/`onCheckedChange`/`label`/`description`/`disabled`,`role=switch`)。只有开/关两态的字段一律用它,不用下拉框或裸复选框;多选列表(如角色授权)仍用复选框 |
 | `components/ui/data-table.tsx` | 通用表格:服务端分页、可选排序、行选择(跨页保留,跳过禁用行)、批量工具栏、列选择(`storageKey` 持久化) |
 | `components/security/` | `password-form.tsx`(改密表单)、`force-password-change.tsx`(`PasswordGate`) |
 | `hooks/use-batch.tsx` | 批量操作确认框与逐 id 失败汇总;用户/角色/API/媒体页复用 |
 | `pages/` | `users`/`roles`/`menus`/`apis`/`audit-logs`/`login-logs`/`media`/`system-config`、`login`、`mfa-verify`、`enrollment` |
-| `contexts/` | `i18n-context`(五语言,`messages/*.ts` 按模块拆分)、`tabs-context`、`lock-screen-context` |
+| `contexts/` | `i18n-context`(五语言,`messages/*.ts` 按模块拆分)、`tabs-context`(`withHome` 保证首页标签始终存在、排首位、不可关闭,会修复本地存储里过期的标签)、`lock-screen-context` |
 | `providers/`、`lib/` | `auth-provider`、`data-provider`;`api.ts`(含 401 后 refresh 重试)、`session.ts`(令牌/Cookie 会话,登录/登出时清权限缓存) |
 
 ### 仪表盘定制 `frontend/src/dashboard/`

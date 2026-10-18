@@ -5,6 +5,7 @@ import { useI18n } from '../../contexts/i18n-context'
 import { User, Role, IPWhitelist } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Switch } from '../../components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { DataTable } from '../../components/ui/data-table'
 import { useBatch, BatchSummary, batchDelete, batchSetStatus } from '../../hooks/use-batch'
@@ -245,7 +246,14 @@ export const UsersPage: React.FC = () => {
           <div className="space-y-4 py-2">
             <div>
               <label className="text-sm font-medium mb-1 block">{t('users.username')}</label>
-              <Input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder={t('users.username')} aria-label={t('users.username')} />
+              <Input
+                value={form.username}
+                onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                placeholder={t('users.username')}
+                aria-label={t('users.username')}
+                readOnly={dialog.mode === 'edit'}
+                className={dialog.mode === 'edit' ? 'bg-gray-50 text-gray-500 cursor-not-allowed focus:ring-0' : undefined}
+              />
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">{t(dialog.mode === 'edit' ? 'users.password_unchanged' : 'users.password')}</label>
@@ -263,31 +271,19 @@ export const UsersPage: React.FC = () => {
               </select>
             </div>
             {dialog.mode === 'edit' && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('users.status')}</label>
-                <select
-                  aria-label={t('users.status')}
-                  value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: Number(e.target.value) }))}
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={1}>{t('users.enabled')}</option>
-                  <option value={0}>{t('users.disabled')}</option>
-                </select>
-              </div>
-            )}
-            <label className="flex items-start gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={form.must_change_password}
-                onChange={e => setForm(f => ({ ...f, must_change_password: e.target.checked }))}
+              <Switch
+                checked={form.status === 1}
+                onCheckedChange={on => setForm(f => ({ ...f, status: on ? 1 : 0 }))}
+                label={t('users.status')}
+                description={form.status === 1 ? t('users.enabled') : t('users.disabled')}
               />
-              <span>
-                <span className="font-medium">{t('users.must_change_password')}</span>
-                <span className="block text-xs text-gray-400">{t('users.must_change_password_hint')}</span>
-              </span>
-            </label>
+            )}
+            <Switch
+              checked={form.must_change_password}
+              onCheckedChange={on => setForm(f => ({ ...f, must_change_password: on }))}
+              label={t('users.must_change_password')}
+              description={t('users.must_change_password_hint')}
+            />
             {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>
@@ -385,12 +381,11 @@ export const UsersPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-2 text-xs text-gray-500">{rule.remark || '-'}</td>
                     <td className="px-4 py-2">
-                      <button
-                        onClick={() => toggleIPWhitelist(rule)}
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs ${rule.enabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}
-                      >
-                        {rule.enabled ? t('users.enabled') : t('users.disabled')}
-                      </button>
+                      <Switch
+                        checked={rule.enabled}
+                        onCheckedChange={() => toggleIPWhitelist(rule)}
+                        aria-label={`${rule.ip} ${rule.enabled ? t('users.enabled') : t('users.disabled')}`}
+                      />
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button aria-label={t('common.delete')} onClick={() => deleteIPWhitelist(rule.id)} className="text-red-500 hover:text-red-700">

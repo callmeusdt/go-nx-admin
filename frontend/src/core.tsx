@@ -124,8 +124,8 @@ export function createApp(opts?: CreateAppOptions): React.FC {
         <I18nProvider options={opts?.i18n}>
           <Reauthenticate />
           <LockScreenProvider>
+            <HomePathContext.Provider value={opts?.homePath ?? DEFAULT_HOME_PATH}>
             <TabsProvider>
-              <HomePathContext.Provider value={opts?.homePath ?? DEFAULT_HOME_PATH}>
               <DashboardOptionsContext.Provider value={opts?.dashboard}>
               <Refine
                 authProvider={authProvider}
@@ -143,8 +143,8 @@ export function createApp(opts?: CreateAppOptions): React.FC {
                 </Routes>
               </Refine>
               </DashboardOptionsContext.Provider>
-              </HomePathContext.Provider>
             </TabsProvider>
+            </HomePathContext.Provider>
           </LockScreenProvider>
         </I18nProvider>
       </BrowserRouter>
