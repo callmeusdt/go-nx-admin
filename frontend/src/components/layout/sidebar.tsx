@@ -79,24 +79,40 @@ export function findMenuAncestors(items: MenuItem[], path: string, trail: string
   return null
 }
 
+const MenuSkeleton: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
+  <div className="space-y-1" aria-hidden="true">
+    {[0, 1, 2, 3, 4].map(i => (
+      <div key={i} className={`flex items-center rounded-lg ${collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2'}`}>
+        <div className="w-4 h-4 rounded bg-slate-800 animate-pulse shrink-0" />
+        {!collapsed && <div className="h-3.5 rounded bg-slate-800 animate-pulse flex-1" />}
+      </div>
+    ))}
+  </div>
+)
+
 export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const { t, routeLabel } = useI18n()
   const { addTab } = useTabs()
   const navigate = useNavigate()
   const home = useHomePath()
   const location = useLocation()
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenuItems)
+  // null until /auth/menus settles, so the first paint is the full tree (base +
+  // extension menus together) instead of the base fallback replaced a moment later.
+  const [menuItems, setMenuItems] = useState<MenuItem[] | null>(null)
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set())
   const navRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
+    let active = true
     api.get<{ data: Menu[] }>('/auth/menus')
-      .then(res => setMenuItems(menuToItems(res.data)))
-      .catch(() => setMenuItems(fallbackMenuItems))
+      .then(res => { if (active) setMenuItems(menuToItems(res.data)) })
+      .catch(() => { if (active) setMenuItems(fallbackMenuItems) })
+    return () => { active = false }
   }, [])
 
   // Keep the tree in step with the current route (refresh, tab switch, deep link).
   useEffect(() => {
+    if (!menuItems) return
     const ancestors = findMenuAncestors(menuItems, location.pathname)
     if (!ancestors) return
     if (ancestors.length) {
@@ -168,8 +184,8 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
           <h1 className="font-bold text-lg w-full px-5 truncate">{t('login.title')}</h1>
         )}
       </div>
-      <nav ref={navRef} className="flex-1 overflow-y-auto p-2 space-y-1">
-        {renderMenu(menuItems)}
+      <nav ref={navRef} className="flex-1 overflow-y-auto p-2 space-y-1" aria-busy={!menuItems}>
+        {menuItems ? renderMenu(menuItems) : <MenuSkeleton collapsed={collapsed} />}
       </nav>
     </aside>
   )
