@@ -271,19 +271,28 @@ export const UsersPage: React.FC = () => {
               </select>
             </div>
             {dialog.mode === 'edit' && (
-              <Switch
-                checked={form.status === 1}
-                onCheckedChange={on => setForm(f => ({ ...f, status: on ? 1 : 0 }))}
-                label={t('users.status')}
-                description={form.status === 1 ? t('users.enabled') : t('users.disabled')}
-              />
+              <div className="flex items-start justify-between gap-4">
+                <label className="text-sm font-medium pt-0.5 min-w-0 basis-1/2 break-words">{t('users.status')}</label>
+                <Switch
+                  checked={form.status === 1}
+                  onCheckedChange={on => setForm(f => ({ ...f, status: on ? 1 : 0 }))}
+                  aria-label={t('users.status')}
+                  label={form.status === 1 ? t('users.enabled') : t('users.disabled')}
+                  className="min-w-0 basis-1/2"
+                />
+              </div>
             )}
-            <Switch
-              checked={form.must_change_password}
-              onCheckedChange={on => setForm(f => ({ ...f, must_change_password: on }))}
-              label={t('users.must_change_password')}
-              description={t('users.must_change_password_hint')}
-            />
+            <div className="flex items-start justify-between gap-4">
+              <label className="text-sm font-medium pt-0.5 min-w-0 basis-1/2 break-words">{t('users.must_change_password')}</label>
+              <Switch
+                checked={form.must_change_password}
+                onCheckedChange={on => setForm(f => ({ ...f, must_change_password: on }))}
+                aria-label={t('users.must_change_password')}
+                label={form.must_change_password ? t('users.enabled') : t('users.disabled')}
+                description={t('users.must_change_password_hint')}
+                className="min-w-0 basis-1/2"
+              />
+            </div>
             {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>
