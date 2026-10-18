@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useHomePath } from '../../dashboard/context'
 import { useTabs } from '../../contexts/tabs-context'
 import { Pin, RotateCw, X } from 'lucide-react'
 import { TAB_REFRESH_EVENT } from './keep-alive'
 import { useI18n } from '../../contexts/i18n-context'
+import { RouteLabelsContext } from './route-labels'
 
 export const TabBar: React.FC = () => {
   const { routeLabel, t } = useI18n()
+  const extraLabels = useContext(RouteLabelsContext)
   const { tabs, activeKey, removeTab, setActiveKey, closeOthers, closeRight, closeLeft, togglePin } = useTabs()
   const navigate = useNavigate()
   const home = useHomePath()
@@ -107,10 +109,10 @@ export const TabBar: React.FC = () => {
 
   return (
     <>
-      <div className="h-8 bg-white border-b border-gray-200 flex items-stretch overflow-hidden shrink-0">
+      <div className="flex-1 min-w-0 h-full overflow-hidden">
         <div
           ref={scrollRef}
-          className="flex-1 min-w-0 h-full flex items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full flex items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map(tab => (
             <div
@@ -118,13 +120,13 @@ export const TabBar: React.FC = () => {
               data-active={activeKey === tab.key}
               onClick={() => handleTabClick(tab.key)}
               onContextMenu={e => handleContextMenu(e, tab.key)}
-              className={`flex items-center gap-1 px-2.5 text-xs cursor-pointer border-r border-gray-200 whitespace-nowrap select-none transition-colors shrink-0 ${
+              className={`flex items-center gap-1.5 px-4 text-sm cursor-pointer border-b-2 whitespace-nowrap select-none transition-colors shrink-0 ${
                 activeKey === tab.key
-                  ? 'bg-blue-50 text-blue-600 border-t-2 border-t-blue-500'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'text-blue-600 border-blue-500 bg-blue-50/50'
+                  : 'text-gray-500 border-transparent hover:text-gray-800 hover:bg-gray-50'
               }`}
             >
-              <span>{routeLabel(tab.key, tab.label)}</span>
+              <span>{routeLabel(tab.key, extraLabels[tab.key] ?? tab.label)}</span>
               {tab.pinned && <Pin className="w-3 h-3" />}
               {tab.closable && !tab.pinned && (
                 <span

@@ -59,7 +59,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**;`buildRoutes` 装配所有页面 |
 | `dashboard/` | **仪表盘定制**,见下节 |
-| `components/layout/` | `index.tsx` 外壳;`sidebar.tsx`(随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单);`tabs.tsx`(横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
+| `components/layout/` | `index.tsx` 外壳(顶栏单行:折叠按钮 + 页签 + 右侧工具区,无面包屑);`route-labels.ts`(`RouteLabelsContext`);`sidebar.tsx`(随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单;`/auth/menus` 返回前显示骨架,不先画基座菜单);`tabs.tsx`(位于顶栏内,`flex-1 min-w-0` 横向滚动,不挤右侧工具区;横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
 | `components/ui/switch.tsx` | 公共开关 `Switch`(`checked`/`onCheckedChange`/`label`/`description`/`disabled`,`role=switch`)。只有开/关两态的字段一律用它,不用下拉框或裸复选框;多选列表(如角色授权)仍用复选框 |
 | `components/ui/data-table.tsx` | 通用表格:服务端分页、可选排序、行选择(跨页保留,跳过禁用行)、批量工具栏、列选择(`storageKey` 持久化) |
 | `components/security/` | `password-form.tsx`(改密表单)、`force-password-change.tsx`(`PasswordGate`) |
