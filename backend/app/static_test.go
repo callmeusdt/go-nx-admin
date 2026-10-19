@@ -62,7 +62,7 @@ func TestStaticHandlerSiteBranding(t *testing.T) {
 
 	config.AppConfig = &config.Config{}
 	body := get("/deep/link").Body.String()
-	if !strings.Contains(body, "<title>我的nxadmin</title>") || !strings.Contains(body, `href="/favicon.svg"`) || strings.Contains(body, "x.ico") {
+	if !strings.Contains(body, "<title>信息管理系统</title>") || !strings.Contains(body, `href="/favicon.svg"`) || strings.Contains(body, "x.ico") {
 		t.Fatalf("fallback: %s", body)
 	}
 	if w := get("/favicon.svg"); w.Code != 200 || !strings.Contains(w.Body.String(), "<svg") {

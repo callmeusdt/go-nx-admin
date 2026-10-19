@@ -26,7 +26,7 @@ jwt:
   mfa_minutes: 5                 # interim token between password and MFA code
 
 site:
-  title: ""                      # browser tab title; empty -> 我的nxadmin
+  title: ""                      # browser tab title; empty -> 信息管理系统
   favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
 
 cors:

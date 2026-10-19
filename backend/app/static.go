@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultSiteTitle = "我的nxadmin"
+	defaultSiteTitle = "信息管理系统"
 	faviconBuiltin   = "/favicon.svg"
 	faviconCustom    = "/_site/favicon"
 )
