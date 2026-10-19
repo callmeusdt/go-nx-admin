@@ -71,6 +71,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `172.18.0.1:19500`；健康入口 `/health`。
 - Vite 默认 `172.18.0.1:5173`，`VITE_HOST` 覆盖 host，`/api` 代理到后端。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
 - 常用入口：`make build-frontend` 构建并复制 embed 资源，`make dev-frontend` 热更新，`make build` 完整构建，`./nx-admin serve` 启动。密码重置命令会写数据，仅在授权内使用。
+- 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，种子账号见 `models.go`）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
 
 ## Submodule 构建
 
