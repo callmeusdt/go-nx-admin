@@ -19,7 +19,14 @@ import (
 func ListUsers(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var users []models.User
-		if err := db.Preload("Role").Find(&users).Error; err != nil {
+		q := db.Preload("Role")
+		if name := strings.TrimSpace(c.Query("username")); name != "" {
+			q = q.Where("username LIKE ?", "%"+name+"%")
+		}
+		if roleID := c.QueryInt("role_id", 0); roleID > 0 {
+			q = q.Where("role_id = ?", roleID)
+		}
+		if err := q.Find(&users).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
 		}
 
