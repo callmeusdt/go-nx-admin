@@ -13,6 +13,8 @@ import { LockScreenProvider } from './contexts/lock-screen-context'
 import { I18nProvider, useI18n } from './contexts/i18n-context'
 import type { I18nOptions } from './contexts/i18n-context'
 import { Layout, RouteLabelsContext } from './components/layout'
+import { TooltipProvider } from './components/ui/tooltip'
+import { ToastProvider } from './components/ui/toast'
 import { KeepAliveExcludeContext } from './components/layout/keep-alive'
 import { LoginPage } from './pages/login'
 import { MFAVerifyPage } from './pages/mfa-verify'
@@ -122,6 +124,8 @@ export function createApp(opts?: CreateAppOptions): React.FC {
     return (
       <BrowserRouter>
         <I18nProvider options={opts?.i18n}>
+          <TooltipProvider>
+          <ToastProvider>
           <Reauthenticate />
           <LockScreenProvider>
             <HomePathContext.Provider value={opts?.homePath ?? DEFAULT_HOME_PATH}>
@@ -146,6 +150,8 @@ export function createApp(opts?: CreateAppOptions): React.FC {
             </TabsProvider>
             </HomePathContext.Provider>
           </LockScreenProvider>
+          </ToastProvider>
+          </TooltipProvider>
         </I18nProvider>
       </BrowserRouter>
     )

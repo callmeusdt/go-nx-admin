@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Loader2 } from 'lucide-react'
 import { useI18n } from '../../contexts/i18n-context'
 import { Button } from './button'
+import { Checkbox } from './checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from './popover'
+import { Tooltip } from './tooltip'
 
 export type SortOrder = 'asc' | 'desc'
 export interface SortState { field: string; order: SortOrder }
@@ -75,21 +78,10 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   const [hidden, setHidden] = useState<string[]>(() =>
     readHidden(storageKey) ?? columns.filter(c => c.defaultVisible === false).map(c => c.key))
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (storageKey) localStorage.setItem(`nx-table-cols:${storageKey}`, JSON.stringify(hidden))
   }, [hidden, storageKey])
-
-  useEffect(() => {
-    if (!pickerOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (!pickerRef.current?.contains(e.target as Node)) setPickerOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [pickerOpen])
 
   const visible = useMemo(
     () => columns.filter(c => c.required || !hidden.includes(c.key)),
@@ -102,11 +94,6 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const selectedRows = useMemo(() => rows.filter(r => selected.has(rowKey(r))), [rows, selected, rowKey])
   const allOnPage = selectableRows.length > 0 && selectableRows.every(r => selected.has(rowKey(r)))
   const someOnPage = selectableRows.some(r => selected.has(rowKey(r)))
-
-  const headerCheckbox = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (headerCheckbox.current) headerCheckbox.current.indeterminate = someOnPage && !allOnPage
-  }, [someOnPage, allOnPage])
 
   const toggleAll = () => {
     if (!onSelectionChange) return
@@ -131,65 +118,62 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const totalPages = total === undefined ? 1 : Math.max(1, Math.ceil(total / pageSize))
   const colSpan = visible.length + (selectable ? 1 : 0)
   const hasSelection = selectable && selectedKeys.length > 0
-  const showToolbar = hasSelection || toolbar || pickable.length > 0
+
+  const columnPicker = pickable.length > 0 && (
+    <Popover>
+      <Tooltip content={t('table.columns')} side="top">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={t('table.columns')}
+            className="-my-1 rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <Columns3 className="h-4 w-4" />
+          </button>
+        </PopoverTrigger>
+      </Tooltip>
+      <PopoverContent>
+        {pickable.map(col => (
+          <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100">
+            <Checkbox
+              checked={!hidden.includes(col.key)}
+              onCheckedChange={() => setHidden(h => h.includes(col.key) ? h.filter(k => k !== col.key) : [...h, col.key])}
+              aria-label={col.label ?? (typeof col.title === 'string' ? col.title : col.key)}
+            />
+            {col.label ?? (typeof col.title === 'string' ? col.title : col.key)}
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
 
   return (
     <div className="space-y-3">
-      {showToolbar && (
-        <div className="flex flex-wrap items-center justify-between gap-2 min-h-8">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {hasSelection && (
-              <>
-                <span className="text-gray-600">{t('table.selected').replace('{count}', String(selectedKeys.length))}</span>
-                {batchActions?.({ selectedKeys, selectedRows, clear })}
-                <Button variant="ghost" size="sm" onClick={clear}>{t('table.clear_selection')}</Button>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {toolbar}
-            {pickable.length > 0 && (
-              <div className="relative" ref={pickerRef}>
-                <Button variant="outline" size="sm" aria-expanded={pickerOpen} onClick={() => setPickerOpen(o => !o)}>
-                  <Columns3 className="w-4 h-4 mr-1" />{t('table.columns')}
-                </Button>
-                {pickerOpen && (
-                  <div className="absolute right-0 z-20 mt-1 min-w-[160px] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                    {pickable.map(col => (
-                      <label key={col.key} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          checked={!hidden.includes(col.key)}
-                          onChange={() => setHidden(h => h.includes(col.key) ? h.filter(k => k !== col.key) : [...h, col.key])}
-                        />
-                        {col.label ?? (typeof col.title === 'string' ? col.title : col.key)}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {toolbar && <div className="flex flex-wrap items-center justify-end gap-2">{toolbar}</div>}
 
-      <div className="relative bg-white rounded-lg border border-gray-200 overflow-x-auto">
+      <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {hasSelection && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-blue-100 bg-blue-50/60 px-4 py-2 text-sm">
+            <span className="text-gray-700">{t('table.selected').replace('{count}', String(selectedKeys.length))}</span>
+            {batchActions?.({ selectedKeys, selectedRows, clear })}
+            <Button variant="ghost" size="sm" onClick={clear}>{t('table.clear_selection')}</Button>
+          </div>
+        )}
+        <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth }}>
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {selectable && (
                 <th className="w-10 px-4 py-3">
-                  <input
-                    ref={headerCheckbox}
-                    type="checkbox"
+                  <Checkbox
                     aria-label={t('table.select_all')}
-                    checked={allOnPage}
+                    checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage}
                     disabled={selectableRows.length === 0}
-                    onChange={toggleAll}
+                    onCheckedChange={toggleAll}
                   />
                 </th>
               )}
-              {visible.map(col => {
+              {visible.map((col, colIndex) => {
                 const active = sort?.field === col.key
                 const sortable = col.sortable && !!onSortChange
                 return (
@@ -211,6 +195,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
                           : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
                       </button>
                     ) : col.title}
+                    {colIndex === visible.length - 1 && columnPicker && <span className="ml-2 inline-flex align-middle">{columnPicker}</span>}
                   </th>
                 )
               })}
@@ -225,12 +210,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
                 <tr key={key} className={`border-b border-gray-100 hover:bg-gray-50 ${checked ? 'bg-blue-50/40' : ''}`}>
                   {selectable && (
                     <td className="w-10 px-4 py-2.5">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         aria-label={t('table.select_row')}
                         checked={checked}
                         disabled={disabled}
-                        onChange={() => toggleRow(key)}
+                        onCheckedChange={() => toggleRow(key)}
                       />
                     </td>
                   )}
@@ -247,6 +231,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
             )}
           </tbody>
         </table>
+        </div>
         {loading && (
           <div role="status" aria-label={t('table.loading')} className="absolute inset-0 flex items-center justify-center bg-white/60">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
