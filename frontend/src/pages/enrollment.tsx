@@ -1,6 +1,10 @@
 import React, { useState } from 'react'
 import { sessionFetch, clearSession } from '../lib/session'
 import { useI18n } from '../contexts/i18n-context'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Alert } from '../components/ui/alert'
+import { FormField } from '../components/ui/form-field'
 
 // Mandatory enrollment uses the same white controls as the existing admin.
 export const EnrollmentPage: React.FC = () => {
@@ -17,15 +21,15 @@ export const EnrollmentPage: React.FC = () => {
     <section className="bg-white border rounded-xl p-8 w-full max-w-lg space-y-4">
       <h1 className="text-xl font-semibold">{copy.title}</h1>
       <p>{copy.hint}</p>
-      {error?<p role="alert" className="text-red-600">{error}</p>:null}
-      {codes.length?<><p>{copy.save}</p><pre className="p-4 bg-gray-50">{codes.join('\n')}</pre><button className="border rounded px-4 py-2" onClick={()=>location.reload()}>{copy.continue}</button></>:<>
-        {!secret?<button disabled={busy} className="border rounded px-4 py-2" onClick={()=>void run(async()=>{const data=await call('mfa/setup');setSecret(data.secret)})}>{copy.setup}</button>:<form className="space-y-4" onSubmit={e=>{e.preventDefault();void run(async()=>{const data=await call('mfa/enable',{code});setCodes(data.recovery_codes);setSecret('');setCode('')})}}>
+      {error?<Alert>{error}</Alert>:null}
+      {codes.length?<><p>{copy.save}</p><pre className="rounded-md bg-gray-50 p-4 font-mono text-sm">{codes.join('\n')}</pre><Button onClick={()=>location.reload()}>{copy.continue}</Button></>:<>
+        {!secret?<Button disabled={busy} onClick={()=>void run(async()=>{const data=await call('mfa/setup');setSecret(data.secret)})}>{copy.setup}</Button>:<form className="space-y-4" onSubmit={e=>{e.preventDefault();void run(async()=>{const data=await call('mfa/enable',{code});setCodes(data.recovery_codes);setSecret('');setCode('')})}}>
           <p className="break-all font-mono" aria-label={copy.secret}>{secret}</p>
-          <label className="block">{copy.code}<input className="block w-full border rounded p-2" value={code} onChange={e=>setCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" maxLength={6}/></label>
-          <button className="bg-blue-600 text-white rounded px-4 py-2" disabled={busy||code.length!==6}>{copy.enable}</button>
+          <FormField label={copy.code}>{id=><Input id={id} value={code} onChange={e=>setCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" maxLength={6}/>}</FormField>
+          <Button disabled={busy||code.length!==6}>{copy.enable}</Button>
         </form>}
       </>}
-      <button disabled={busy} className="border rounded px-4 py-2" onClick={()=>void run(async()=>{await call('logout');clearSession();location.href='/login'})}>{copy.logout}</button>
+      <Button variant="outline" disabled={busy} onClick={()=>void run(async()=>{await call('logout');clearSession();location.href='/login'})}>{copy.logout}</Button>
     </section>
   </main>
 }

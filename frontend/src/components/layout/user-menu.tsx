@@ -20,6 +20,10 @@ import { IPWhitelist } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
 import { PasswordForm } from '../security/password-form'
 import { Switch } from '../ui/switch'
+import { Alert } from '../ui/alert'
+import { Badge } from '../ui/badge'
+import { Tooltip } from '../ui/tooltip'
+import { SimpleTable, SimpleTableRow, SimpleTableCell } from '../ui/table'
 
 export const UserMenu: React.FC = () => {
   const { t } = useI18n()
@@ -195,7 +199,7 @@ export const UserMenu: React.FC = () => {
               <h3 className="text-sm font-semibold text-slate-700">{t('password.title')}</h3>
               <p className="text-xs text-gray-400">{t('password.hint')}</p>
               {passwordDone ? (
-                <p role="status" className="text-sm text-green-600">{t('password.changed')}</p>
+                <Alert variant="success">{t('password.changed')}</Alert>
               ) : (
                 <PasswordForm mfaEnabled={mfaEnabled} onChanged={() => setPasswordDone(true)} />
               )}
@@ -205,7 +209,7 @@ export const UserMenu: React.FC = () => {
               <h3 className="text-sm font-semibold text-slate-700">{t('security.mfa')}</h3>
               <p className="text-xs text-gray-500">{mfaEnabled ? t('account.mfa_enabled') : t('account.mfa_disabled')}</p>
               <div>
-            {mfaStep === 'idle' && mfaError && <p role="alert" className="text-red-500 text-sm mb-3">{mfaError}</p>}
+            {mfaStep === 'idle' && mfaError && <Alert className="mb-3">{mfaError}</Alert>}
             {mfaStep === 'idle' && (
               <div className="space-y-3">
                 {mfaEnabled ? (
@@ -224,10 +228,10 @@ export const UserMenu: React.FC = () => {
               <div className="space-y-4">
                 <p className="text-sm text-gray-500">{t('account.mfa_setup_hint')}</p>
                 <div className="text-center">
-                  <code aria-label={t('account.mfa_secret')} className="text-xs bg-gray-100 px-2 py-1 rounded break-all">{mfaSecret}</code>
+                  <Badge aria-label={t('account.mfa_secret')} className="font-mono break-all">{mfaSecret}</Badge>
                 </div>
                 <Input placeholder={t('account.mfa_code')} value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
-                {mfaError && <p className="text-red-500 text-sm">{mfaError}</p>}
+                {mfaError && <Alert>{mfaError}</Alert>}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={closeMfa} className="flex-1">{t('account.cancel')}</Button>
                   <Button onClick={enableMFA} disabled={mfaLoading} className="flex-1">{t('account.mfa_verify_enable')}</Button>
@@ -239,7 +243,7 @@ export const UserMenu: React.FC = () => {
                 <p className="text-sm text-gray-500">{t('account.mfa_codes_hint')}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {recoveryCodes.map((c, i) => (
-                    <code key={i} className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">{c}</code>
+                    <Badge key={i} className="justify-center font-mono">{c}</Badge>
                   ))}
                 </div>
                 <Button onClick={closeMfa} className="w-full">{t('account.mfa_saved')}</Button>
@@ -250,7 +254,7 @@ export const UserMenu: React.FC = () => {
                 <p className="text-sm text-gray-500">{t('account.mfa_disable_verify')}</p>
                 <Input type="password" placeholder={t('account.password')} value={mfaPassword} onChange={e => setMfaPassword(e.target.value)} />
                 <Input placeholder={t('account.mfa_code')} value={mfaCode} onChange={e => setMfaCode(e.target.value)} maxLength={6} />
-                {mfaError && <p className="text-red-500 text-sm">{mfaError}</p>}
+                {mfaError && <Alert>{mfaError}</Alert>}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => { setMfaStep('idle'); setMfaError('') }} className="flex-1">{t('account.back')}</Button>
                   <Button variant="destructive" onClick={disableMFA} disabled={mfaLoading} className="flex-1">{t('account.mfa_confirm_disable')}</Button>
@@ -267,37 +271,37 @@ export const UserMenu: React.FC = () => {
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative min-w-40 flex-1">
                   <Input placeholder={t('account.ip_placeholder')} value={myIP} onChange={e => setMyIP(e.target.value)} className="pr-9" />
-                  <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" title={t('account.current_ip')}>
-                    <Monitor className="w-4 h-4" />
-                  </button>
+                  <Tooltip content={t('account.current_ip')}>
+                    <button type="button" onClick={async () => { const r = await api.get<{ip:string}>('/auth/my-ip'); setMyIP(r.ip) }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-blue-600" aria-label={t('account.current_ip')}>
+                      <Monitor className="w-4 h-4" />
+                    </button>
+                  </Tooltip>
                 </div>
                 <Input placeholder={t('account.remark')} value={myIPRemark} onChange={e => setMyIPRemark(e.target.value)} className="w-28 shrink-0" />
                 <Button size="sm" aria-label={t('account.add_ip')} onClick={addMyIP}><Plus className="w-4 h-4" /></Button>
               </div>
-              {myIPError && <p className="text-red-500 text-xs">{myIPError}</p>}
+              {myIPError && <Alert className="text-xs">{myIPError}</Alert>}
               {myWhitelists.length > 0 && (
-                <div className="rounded border border-gray-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {myWhitelists.map(rule => (
-                        <tr key={rule.id} className="border-b border-gray-100 last:border-0">
-                          <td className="px-3 py-2"><code className="text-xs">{rule.ip}</code></td>
-                          <td className="px-3 py-2 text-xs text-gray-400">{rule.remark || '-'}</td>
-                          <td className="px-3 py-2">
-                            <Switch
-                              checked={rule.enabled}
-                              onCheckedChange={() => toggleMyIP(rule)}
-                              aria-label={`${rule.ip} ${rule.enabled ? t('account.enabled') : t('account.disabled')}`}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable>
+                  <tbody>
+                    {myWhitelists.map(rule => (
+                      <SimpleTableRow key={rule.id}>
+                        <SimpleTableCell><code className="text-xs">{rule.ip}</code></SimpleTableCell>
+                        <SimpleTableCell className="text-xs text-gray-400">{rule.remark || '-'}</SimpleTableCell>
+                        <SimpleTableCell>
+                          <Switch
+                            checked={rule.enabled}
+                            onCheckedChange={() => toggleMyIP(rule)}
+                            aria-label={`${rule.ip} ${rule.enabled ? t('account.enabled') : t('account.disabled')}`}
+                          />
+                        </SimpleTableCell>
+                        <SimpleTableCell className="text-right">
+                          <button aria-label={t('account.delete_ip')} onClick={() => deleteMyIP(rule.id)} className="text-red-500"><Trash2 className="w-3 h-3" /></button>
+                        </SimpleTableCell>
+                      </SimpleTableRow>
+                    ))}
+                  </tbody>
+                </SimpleTable>
               )}
             </div>
             </section>

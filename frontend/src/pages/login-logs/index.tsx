@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
 import { LoginLog } from '../../types'
-import { Button } from '../../components/ui/button'
+import { Alert } from '../../components/ui/alert'
+import { Badge } from '../../components/ui/badge'
+import { PageHeader } from '../../components/ui/page-header'
+import { FilterBar, FilterField } from '../../components/ui/filter-bar'
 import { Input } from '../../components/ui/input'
+import { Select } from '../../components/ui/select'
 import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
@@ -57,24 +61,29 @@ export const LoginLogsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">{t('login_logs.title')}</h2>
-        <div className="flex items-center gap-2" />
-      </div>
-      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 rounded-lg border border-gray-200 bg-white p-3">
-        <Input placeholder={t('login_logs.username')} value={filters.username} onChange={e => setFilters(f => ({ ...f, username: e.target.value }))} />
-        <select className="h-10 rounded-md border border-gray-300 px-3 text-sm" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
-          <option value="">{t('login_logs.all_status')}</option><option value="success">{t('login_logs.success')}</option><option value="fail">{t('login_logs.fail')}</option>
-        </select>
-        <Input placeholder="IP" value={filters.ip} onChange={e => setFilters(f => ({ ...f, ip: e.target.value }))} />
-        <DateTimeInput value={filters.start} placeholder={t('logs.start')} onChange={value => setFilters(f => ({ ...f, start: value }))} />
-        <DateTimeInput value={filters.end} placeholder={t('logs.end')} onChange={value => setFilters(f => ({ ...f, end: value }))} />
-        <div className="col-span-full flex justify-end gap-2">
-          <Button variant="outline" onClick={() => { setFilters(defaultFilters); void load(1, defaultFilters) }}>{t('logs.reset')}</Button>
-          <Button onClick={() => load(1)}>{t('logs.query')}</Button>
-        </div>
-      </div>
+      <PageHeader title={t('login_logs.title')} />
+      {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
+      <FilterBar
+        onQuery={() => load(1)}
+        onReset={() => { setFilters(defaultFilters); void load(1, defaultFilters) }}
+      >
+        <FilterField><Input placeholder={t('login_logs.username')} aria-label={t('login_logs.username')} value={filters.username} onChange={e => setFilters(f => ({ ...f, username: e.target.value }))} /></FilterField>
+        <FilterField>
+          <Select
+            value={filters.status}
+            onValueChange={status => setFilters(f => ({ ...f, status }))}
+            aria-label={t('login_logs.status')}
+            options={[
+              { value: '', label: t('login_logs.all_status') },
+              { value: 'success', label: t('login_logs.success') },
+              { value: 'fail', label: t('login_logs.fail') },
+            ]}
+          />
+        </FilterField>
+        <FilterField><Input placeholder="IP" aria-label="IP" value={filters.ip} onChange={e => setFilters(f => ({ ...f, ip: e.target.value }))} /></FilterField>
+        <FilterField><DateTimeInput value={filters.start} placeholder={t('logs.start')} onChange={value => setFilters(f => ({ ...f, start: value }))} /></FilterField>
+        <FilterField><DateTimeInput value={filters.end} placeholder={t('logs.end')} onChange={value => setFilters(f => ({ ...f, end: value }))} /></FilterField>
+      </FilterBar>
       <DataTable<LoginLog>
         storageKey="login-logs"
         rows={logs}
@@ -89,7 +98,7 @@ export const LoginLogsPage: React.FC = () => {
           { key: 'username', title: t('login_logs.user'), label: t('login_logs.user') },
           {
             key: 'status', title: t('login_logs.status'), label: t('login_logs.status'),
-            render: log => <span className={log.status === 'success' ? 'text-green-600' : 'text-red-600'}>{translated('login_logs.' + log.status, log.status)}</span>,
+            render: log => <Badge variant={log.status === 'success' ? 'success' : 'danger'}>{translated('login_logs.' + log.status, log.status)}</Badge>,
           },
           {
             key: 'ip', title: t('login_logs.ip_geo'), label: t('login_logs.ip_geo'),

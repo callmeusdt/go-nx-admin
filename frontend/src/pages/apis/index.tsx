@@ -3,6 +3,11 @@ import { Plus, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { ApiItem } from '../../types'
 import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Alert } from '../../components/ui/alert'
+import { IconButton } from '../../components/ui/icon-button'
+import { PageHeader } from '../../components/ui/page-header'
+import { Select } from '../../components/ui/select'
 import { useI18n } from '../../contexts/i18n-context'
 import { DataTable } from '../../components/ui/data-table'
 import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
@@ -52,14 +57,20 @@ export const ApisPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-slate-800">{t('apis.title')}</h2>
-      {error && <p role="alert" className="text-red-600">{error}</p>}
+      <PageHeader title={t('apis.title')} />
+      {error && <Alert>{error}</Alert>}
       <div className="bg-white rounded-lg border border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        <input aria-label={t('apis.group')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.group === '默认' ? t('apis.default_group') : form.group} onChange={e => setForm(f => ({ ...f, group: e.target.value }))} placeholder={t('apis.group')} />
-        <input aria-label={t('apis.name')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('apis.name')} />
-        <input aria-label={t('apis.path_pattern')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.path} onChange={e => setForm(f => ({ ...f, path: e.target.value }))} placeholder={t('apis.path_pattern')} />
-        <select aria-label={t('apis.method')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value }))}><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option value=".*">{t('apis.all_methods')}</option></select>
-        <input aria-label={t('apis.description')} className="min-w-0 h-10 border rounded px-3 text-sm" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('apis.description')} />
+        <Input aria-label={t('apis.group')} value={form.group === '默认' ? t('apis.default_group') : form.group} onChange={e => setForm(f => ({ ...f, group: e.target.value }))} placeholder={t('apis.group')} />
+        <Input aria-label={t('apis.name')} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('apis.name')} />
+        <Input aria-label={t('apis.path_pattern')} value={form.path} onChange={e => setForm(f => ({ ...f, path: e.target.value }))} placeholder={t('apis.path_pattern')} />
+        <Select
+          aria-label={t('apis.method')}
+          className="min-w-0"
+          value={form.method}
+          onValueChange={method => setForm(f => ({ ...f, method }))}
+          options={[...['GET', 'POST', 'PUT', 'DELETE'].map(m => ({ value: m, label: m })), { value: '.*', label: t('apis.all_methods') }]}
+        />
+        <Input aria-label={t('apis.description')} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('apis.description')} />
         <Button onClick={create}><Plus className="w-4 h-4 mr-1" />{t('common.create')}</Button>
       </div>
       <BatchSummary text={batch.summary} />
@@ -81,7 +92,7 @@ export const ApisPage: React.FC = () => {
           { key: 'path', title: t('apis.path'), label: t('apis.path'), render: i => <code className="text-xs">{i.path}</code> },
           { key: 'method', title: t('apis.method'), label: t('apis.method'), render: i => <code className="text-xs">{i.method}</code> },
           { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: i => (
-            <button aria-label={t('common.delete')} onClick={() => void remove(i.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+            <IconButton tone="danger" label={t('common.delete')} onClick={() => void remove(i.id)}><Trash2 className="w-4 h-4" /></IconButton>
           ) },
         ]}
       />

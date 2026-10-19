@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useHomePath } from '../dashboard/context'
 import { sessionFetch, rememberLogin, hasPendingMFA, usesCookieSession } from '../lib/session'
 import { useI18n } from '../contexts/i18n-context'
+import { Input } from '../components/ui/input'
+import { Button } from '../components/ui/button'
+import { Alert } from '../components/ui/alert'
 
 export const MFAVerifyPage: React.FC = () => {
   const { t } = useI18n()
@@ -65,33 +68,23 @@ export const MFAVerifyPage: React.FC = () => {
           <p className="text-slate-500 mt-2">{t('mfa.hint')}</p>
         </div>
         <form onSubmit={handleVerify} className="space-y-4">
-          <div>
-            <input
-              type="text"
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              placeholder={t('mfa.code')}
-              aria-label={t('mfa.code')}
-              maxLength={64}
-              autoComplete="one-time-code"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-center text-lg tracking-wider focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
+          <Input
+            type="text"
+            value={code}
+            onChange={e => setCode(e.target.value)}
+            placeholder={t('mfa.code')}
+            aria-label={t('mfa.code')}
+            maxLength={64}
+            autoComplete="one-time-code"
+            className="text-center text-lg tracking-wider"
+          />
+          {error && <Alert className="text-center">{error}</Alert>}
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? t('mfa.verifying') : t('mfa.verify')}
-          </button>
-          <button
-            type="button"
-            onClick={handleBack}
-            className="w-full py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={handleBack} className="w-full">
             {t('mfa.back')}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useI18n } from '../contexts/i18n-context'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Alert } from '../components/ui/alert'
 
 export interface BatchFailure { id: number; reason: string }
 interface BatchResponse { deleted?: number[]; updated?: number[]; failed?: BatchFailure[] }
@@ -77,7 +78,7 @@ export function useBatch(onDone: (succeeded: number[]) => void) {
         {pending && (
           <p className="text-gray-500 text-sm py-2">{t(pending.action.confirmKey).replace('{count}', String(pending.ids.length))}</p>
         )}
-        {summary && failures.length > 0 && <p role="status" className="text-sm text-amber-700">{summary}</p>}
+        {summary && failures.length > 0 && <Alert variant="warning">{summary}</Alert>}
         {failures.length > 0 && (
           <ul className="max-h-40 overflow-y-auto rounded border border-gray-200 text-xs divide-y" data-locale={locale}>
             {failures.map(f => (
@@ -85,7 +86,7 @@ export function useBatch(onDone: (succeeded: number[]) => void) {
             ))}
           </ul>
         )}
-        {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
+        {error && <Alert>{error}</Alert>}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={close} disabled={running}>{t('common.cancel')}</Button>
           {pending && (
@@ -102,4 +103,4 @@ export function useBatch(onDone: (succeeded: number[]) => void) {
 }
 
 export const BatchSummary: React.FC<{ text: string }> = ({ text }) =>
-  text ? <p role="status" className="text-sm text-gray-600">{text}</p> : null
+  text ? <Alert variant="info">{text}</Alert> : null

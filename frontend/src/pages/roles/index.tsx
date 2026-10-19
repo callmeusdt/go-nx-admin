@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Loader2, Shield, Menu as MenuIcon, Route, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Shield, Menu as MenuIcon, Route, ChevronRight } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useI18n } from '../../contexts/i18n-context'
 import { Menu, Role } from '../../types'
@@ -7,6 +7,13 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { DataTable } from '../../components/ui/data-table'
+import { Badge } from '../../components/ui/badge'
+import { PageHeader } from '../../components/ui/page-header'
+import { Alert } from '../../components/ui/alert'
+import { Checkbox } from '../../components/ui/checkbox'
+import { FormField } from '../../components/ui/form-field'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
+import { IconButton } from '../../components/ui/icon-button'
 import { useBatch, BatchSummary, batchDelete } from '../../hooks/use-batch'
 
 export const RolesPage: React.FC = () => {
@@ -182,11 +189,8 @@ export const RolesPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-slate-800">{t('roles.title')}</h2>
-        <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t('roles.create')}</Button>
-      </div>
-      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
+      <PageHeader title={t('roles.title')} actions={<Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t('roles.create')}</Button>} />
+      {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 
       <BatchSummary text={batch.summary} />
       <DataTable<Role>
@@ -204,16 +208,16 @@ export const RolesPage: React.FC = () => {
         columns={[
           { key: 'id', title: 'ID', className: 'text-gray-500' },
           { key: 'name', title: t('roles.name'), label: t('roles.name'), className: 'font-medium' },
-          { key: 'slug', title: t('roles.slug'), label: t('roles.slug'), render: r => <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{r.slug}</code> },
+          { key: 'slug', title: t('roles.slug'), label: t('roles.slug'), render: r => <Badge className="font-mono">{r.slug}</Badge> },
           { key: 'type', title: t('roles.type'), label: t('roles.type'), render: r => r.is_system ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700"><Shield className="w-3 h-3" />{t('roles.system')}</span>
+            <Badge variant="warning"><Shield className="w-3 h-3" />{t('roles.system')}</Badge>
           ) : <span className="text-xs text-gray-400">{t('roles.custom')}</span> },
           { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: r => (
             <div className="flex items-center justify-end gap-1">
-              <button onClick={() => openMenuDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-green-600'}`} title={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')} aria-label={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')}><MenuIcon className="w-4 h-4" /></button>
-              <button onClick={() => openPolicyDialog(r)} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-purple-600'}`} title={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')} aria-label={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')}><Route className="w-4 h-4" /></button>
-              <button aria-label={t('roles.edit')} title={t('roles.edit')} onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
-              <button aria-label={t('common.delete')} title={t('common.delete')} onClick={() => { setDelId(r.id); setDelErr('') }} disabled={r.is_system} className={`p-1.5 rounded text-gray-500 ${r.is_system ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
+              <IconButton tone="success" label={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')} disabled={r.is_system} onClick={() => openMenuDialog(r)}><MenuIcon className="w-4 h-4" /></IconButton>
+              <IconButton tone="primary" label={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')} disabled={r.is_system} onClick={() => openPolicyDialog(r)}><Route className="w-4 h-4" /></IconButton>
+              <IconButton tone="primary" label={t('roles.edit')} onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></IconButton>
+              <IconButton tone="danger" label={t('common.delete')} disabled={r.is_system} onClick={() => { setDelId(r.id); setDelErr('') }}><Trash2 className="w-4 h-4" /></IconButton>
             </div>
           ) },
         ]}
@@ -226,16 +230,13 @@ export const RolesPage: React.FC = () => {
             <DialogTitle>{dialog.mode === 'create' ? t('roles.create') : t('roles.edit')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <label className="text-sm font-medium mb-1 block">{t('roles.name')}</label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('roles.name_hint')} aria-label={t('roles.name')} />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">{t('roles.slug')}</label>
-              <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={t('roles.slug_hint')} aria-label={t('roles.slug')} />
-              <p className="text-xs text-gray-400 mt-1">{t('roles.slug_help')}</p>
-            </div>
-            {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
+            <FormField label={t('roles.name')}>{id => (
+              <Input id={id} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('roles.name_hint')} />
+            )}</FormField>
+            <FormField label={t('roles.slug')} hint={t('roles.slug_help')}>{id => (
+              <Input id={id} value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={t('roles.slug_hint')} />
+            )}</FormField>
+            {error && <Alert>{error}</Alert>}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? t('roles.saving') : t('common.save')}</Button>
@@ -244,17 +245,14 @@ export const RolesPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!delId} onOpenChange={v => !v && setDelId(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto break-words">
-          <DialogHeader><DialogTitle>{t('common.confirm_delete')}</DialogTitle></DialogHeader>
-          <p className="text-gray-500 text-sm py-2">{t('roles.delete_hint')}</p>
-          {delErr && <p role="alert" className="text-red-500 text-sm">{delErr}</p>}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => { setDelId(null); setDelErr('') }}>{t('common.cancel')}</Button>
-            <Button variant="destructive" onClick={handleDelete}>{t('common.confirm_delete')}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!delId}
+        onOpenChange={v => { if (!v) { setDelId(null); setDelErr('') } }}
+        onConfirm={handleDelete}
+        description={t('roles.delete_hint')}
+        error={delErr}
+        destructive
+      />
 
       <Dialog open={!!menuDialogRole} onOpenChange={v => !v && setMenuDialogRole(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto break-words">
@@ -262,12 +260,12 @@ export const RolesPage: React.FC = () => {
           <div className="mt-4 mb-6 max-h-[420px] overflow-auto border rounded-md p-2 space-y-1">
             {flattenMenus(menus).map(menu => (
               <label key={menu.id} className="flex flex-wrap items-center gap-2 text-sm rounded px-2 py-1.5 hover:bg-gray-50" style={{ paddingLeft: 8 + menu.depth * 20 }}>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  aria-label={routeLabel(menu.path, menu.name)}
                   checked={checkedMenus.has(menu.id)}
-                  onChange={e => setCheckedMenus(prev => {
+                  onCheckedChange={on => setCheckedMenus(prev => {
                     const next = new Set(prev)
-                    e.target.checked ? next.add(menu.id) : next.delete(menu.id)
+                    on ? next.add(menu.id) : next.delete(menu.id)
                     return next
                   })}
                 />
@@ -297,17 +295,20 @@ export const RolesPage: React.FC = () => {
                       className="p-0.5 rounded hover:bg-gray-200">
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
                     </button>
-                    <input type="checkbox"
-                      checked={gs === 'all'}
-                      ref={el => { if (el) el.indeterminate = gs === 'some' }}
-                      onChange={() => toggleGroup(group)}
-                      className="shrink-0 w-4 h-4" />
+                    <Checkbox
+                      aria-label={items.every(item => !item.group) ? t('roles.other_group') : translated(`permission_groups.${group}`, group)}
+                      checked={gs === 'some' ? 'indeterminate' : gs === 'all'}
+                      onCheckedChange={() => toggleGroup(group)} />
                     <span className="min-w-0 break-words">{items.every(item => !item.group) ? t('roles.other_group') : translated(`permission_groups.${group}`, group)}</span>
                     <code className="text-xs text-gray-400 ml-auto break-all">{t('roles.item_count').replace('{count}', String(items.length))}</code>
                   </label>
                   {!collapsed && items.map(perm => (
                     <label key={perm.key} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer">
-                      <input type="checkbox" checked={checkedPerms.has(perm.key)} onChange={() => togglePerm(perm.key)} className="shrink-0 w-4 h-4 ml-11" />
+                      <Checkbox
+                        aria-label={translated(`permissions.${perm.key}`, perm.name)}
+                        checked={checkedPerms.has(perm.key)}
+                        onCheckedChange={() => togglePerm(perm.key)}
+                        className="ml-11" />
                       <span className="min-w-0 break-words">{translated(`permissions.${perm.key}`, perm.name)}</span>
                       <code className="text-xs text-gray-400 ml-auto break-all">{perm.key}</code>
                     </label>

@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
 import { AuditLog } from '../../types'
-import { Button } from '../../components/ui/button'
+import { Alert } from '../../components/ui/alert'
+import { Badge } from '../../components/ui/badge'
+import { PageHeader } from '../../components/ui/page-header'
+import { FilterBar, FilterField } from '../../components/ui/filter-bar'
 import { Input } from '../../components/ui/input'
+import { Select } from '../../components/ui/select'
 import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
@@ -10,11 +14,11 @@ import { useOnTabActivate } from '../../components/layout/keep-alive'
 
 const pageSize = 20
 
-const methodColors: Record<string, string> = {
-  'GET': 'bg-blue-50 text-blue-700',
-  'POST': 'bg-green-50 text-green-700',
-  'PUT': 'bg-amber-50 text-amber-700',
-  'DELETE': 'bg-red-50 text-red-700',
+const methodVariants: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
+  GET: 'info',
+  POST: 'success',
+  PUT: 'warning',
+  DELETE: 'danger',
 }
 
 export const AuditLogsPage: React.FC = () => {
@@ -48,26 +52,27 @@ export const AuditLogsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">{t('audit_logs.title')}</h2>
-        <div className="flex items-center gap-2" />
-      </div>
-      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
+      <PageHeader title={t('audit_logs.title')} />
+      {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 rounded-lg border border-gray-200 bg-white p-3">
-        <Input placeholder={t('audit_logs.operator')} value={filters.operator} onChange={e => setFilters(f => ({ ...f, operator: e.target.value }))} />
-        <Input placeholder={t('audit_logs.path')} value={filters.path} onChange={e => setFilters(f => ({ ...f, path: e.target.value }))} />
-        <select className="h-10 rounded-md border border-gray-300 px-3 text-sm" value={filters.method} onChange={e => setFilters(f => ({ ...f, method: e.target.value }))}>
-          <option value="">{t('audit_logs.all_methods')}</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
-        </select>
-        <Input placeholder="IP" value={filters.ip} onChange={e => setFilters(f => ({ ...f, ip: e.target.value }))} />
-        <DateTimeInput value={filters.start} placeholder={t('logs.start')} onChange={value => setFilters(f => ({ ...f, start: value }))} />
-        <DateTimeInput value={filters.end} placeholder={t('logs.end')} onChange={value => setFilters(f => ({ ...f, end: value }))} />
-        <div className="col-span-full flex justify-end gap-2">
-          <Button variant="outline" onClick={() => { const reset = { operator: '', path: '', method: '', ip: '', start: '', end: '' }; setFilters(reset); void fetchLogs(1, reset) }}>{t('logs.reset')}</Button>
-          <Button onClick={() => fetchLogs(1)}>{t('logs.query')}</Button>
-        </div>
-      </div>
+      <FilterBar
+        onQuery={() => fetchLogs(1)}
+        onReset={() => { const reset = { operator: '', path: '', method: '', ip: '', start: '', end: '' }; setFilters(reset); void fetchLogs(1, reset) }}
+      >
+        <FilterField><Input placeholder={t('audit_logs.operator')} aria-label={t('audit_logs.operator')} value={filters.operator} onChange={e => setFilters(f => ({ ...f, operator: e.target.value }))} /></FilterField>
+        <FilterField><Input placeholder={t('audit_logs.path')} aria-label={t('audit_logs.path')} value={filters.path} onChange={e => setFilters(f => ({ ...f, path: e.target.value }))} /></FilterField>
+        <FilterField>
+          <Select
+            value={filters.method}
+            onValueChange={method => setFilters(f => ({ ...f, method }))}
+            aria-label={t('logs.method')}
+            options={[{ value: '', label: t('audit_logs.all_methods') }, ...['GET', 'POST', 'PUT', 'DELETE'].map(m => ({ value: m, label: m }))]}
+          />
+        </FilterField>
+        <FilterField><Input placeholder="IP" aria-label="IP" value={filters.ip} onChange={e => setFilters(f => ({ ...f, ip: e.target.value }))} /></FilterField>
+        <FilterField><DateTimeInput value={filters.start} placeholder={t('logs.start')} onChange={value => setFilters(f => ({ ...f, start: value }))} /></FilterField>
+        <FilterField><DateTimeInput value={filters.end} placeholder={t('logs.end')} onChange={value => setFilters(f => ({ ...f, end: value }))} /></FilterField>
+      </FilterBar>
 
       <DataTable<AuditLog>
         storageKey="audit-logs"
@@ -86,7 +91,7 @@ export const AuditLogsPage: React.FC = () => {
           {
             key: 'method', title: t('logs.method'), label: t('logs.method'),
             render: log => (
-              <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-mono ${methodColors[log.method] || 'bg-gray-50 text-gray-600'}`}>{log.method}</span>
+              <Badge variant={methodVariants[log.method] || 'neutral'} className="font-mono">{log.method}</Badge>
             ),
           },
           { key: 'ip', title: 'IP', className: 'text-gray-500 text-xs' },

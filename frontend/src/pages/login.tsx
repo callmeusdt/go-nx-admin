@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SlideCaptchaModal } from '../components/ui/slide-captcha-modal'
 import { useI18n } from '../contexts/i18n-context'
+import { Input } from '../components/ui/input'
+import { Button } from '../components/ui/button'
+import { Alert } from '../components/ui/alert'
 import { sessionFetch, rememberLogin } from '../lib/session'
 import { useHomePath } from '../dashboard/context'
 
@@ -172,21 +175,14 @@ export const LoginPage: React.FC = () => {
           <p className="text-slate-500 mt-2">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)}
-              placeholder={t('login.username')}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" />
-          </div>
-          <div>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder={t('login.password')}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" />
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+          <Input type="text" value={username} onChange={e => setUsername(e.target.value)}
+            placeholder={t('login.username')} aria-label={t('login.username')} />
+          <Input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder={t('login.password')} aria-label={t('login.password')} />
+          {error && <Alert>{error}</Alert>}
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? t('login.loading') : t('login.submit')}
-          </button>
+          </Button>
         </form>
       </div>
 

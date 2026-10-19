@@ -1,9 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Menu } from '../../types'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Select } from '../../components/ui/select'
+import { Badge } from '../../components/ui/badge'
+import { PageHeader } from '../../components/ui/page-header'
+import { Alert } from '../../components/ui/alert'
+import { Spinner } from '../../components/ui/spinner'
+import { IconButton } from '../../components/ui/icon-button'
+import { FormField } from '../../components/ui/form-field'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
+import { DataTable } from '../../components/ui/data-table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { useI18n } from '../../contexts/i18n-context'
 
@@ -127,70 +136,51 @@ export const MenusPage: React.FC = () => {
   ]
   const visibleFlat = visibleMenus(flat, collapsed)
 
-  if (loading) return <div className="flex justify-center py-20" role="status" aria-label={t('common.loading')}><Loader2 aria-hidden="true" className="w-6 h-6 animate-spin text-gray-400" /></div>
+  if (loading) return <Spinner label={t('common.loading')} />
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">{t('menus.title')}</h2>
-        <Button size="sm" onClick={() => openCreate()}><Plus aria-hidden="true" className="w-4 h-4 mr-1" />{t('menus.create')}</Button>
-      </div>
-      {loadFailed && <p role="alert" className="text-red-600">{t('ui.request_failed')}</p>}
+      <PageHeader title={t('menus.title')} actions={<Button size="sm" onClick={() => openCreate()}><Plus aria-hidden="true" className="w-4 h-4 mr-1" />{t('menus.create')}</Button>} />
+      {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('menus.name')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('menus.path')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('menus.permission')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('menus.icon')}</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">{t('menus.sort')}</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleFlat.map(m => {
-              const hasChildren = m.children && m.children.length > 0
-              const isCollapsed = collapsed.has(m.id)
-              return (
-                <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium">
-                    <span className="flex items-center" style={{ paddingLeft: m.depth * 24 }}>
-                      {hasChildren ? (
-                        <button onClick={() => toggleCollapse(m.id)} className="mr-1 p-0.5 rounded hover:bg-gray-200" aria-label={t(isCollapsed ? 'menus.expand' : 'menus.collapse')} title={t(isCollapsed ? 'menus.expand' : 'menus.collapse')}>
-                          {isCollapsed ? <ChevronRight aria-hidden="true" className="w-3.5 h-3.5" /> : <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />}
-                        </button>
-                      ) : (
-                        <span className="w-5" />
-                      )}
-                      {routeLabel(m.path, m.name)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{m.path || '-'}</td>
-                  <td className="px-4 py-2.5"><code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{m.permission || '-'}</code></td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{m.icon || '-'}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{m.sort}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {!m.parent_id && (
-                        <button onClick={() => openCreate(m.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-green-600" aria-label={t('menus.add_child')} title={t('menus.add_child')}><Plus aria-hidden="true" className="w-4 h-4" /></button>
-                      )}
-                      <button onClick={() => openEdit(m)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600" aria-label={t('common.edit')} title={t('common.edit')}><Pencil aria-hidden="true" className="w-4 h-4" /></button>
-                      <button onClick={() => setDelId(m.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-red-600" aria-label={t('common.delete')} title={t('common.delete')}><Trash2 aria-hidden="true" className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-            {visibleFlat.length === 0 && (
-              <tr><td colSpan={6} className="text-left px-4 py-8 text-gray-400">{t('common.no_data')}</td></tr>
-            )}
-          </tbody>
-        </table>
-        </div>
-      </div>
+      <DataTable<Menu & { depth: number }>
+        storageKey="menus"
+        rows={visibleFlat}
+        rowKey={m => m.id}
+        minWidth={720}
+        emptyText={t('common.no_data')}
+        columns={[
+          { key: 'name', title: t('menus.name'), label: t('menus.name'), className: 'font-medium', render: m => {
+            const hasChildren = m.children && m.children.length > 0
+            const isCollapsed = collapsed.has(m.id)
+            return (
+              <span className="flex items-center" style={{ paddingLeft: m.depth * 24 }}>
+                {hasChildren ? (
+                  <button onClick={() => toggleCollapse(m.id)} className="mr-1 p-0.5 rounded hover:bg-gray-200" aria-label={t(isCollapsed ? 'menus.expand' : 'menus.collapse')} title={t(isCollapsed ? 'menus.expand' : 'menus.collapse')}>
+                    {isCollapsed ? <ChevronRight aria-hidden="true" className="w-3.5 h-3.5" /> : <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />}
+                  </button>
+                ) : (
+                  <span className="w-5" />
+                )}
+                {routeLabel(m.path, m.name)}
+              </span>
+            )
+          } },
+          { key: 'path', title: t('menus.path'), label: t('menus.path'), className: 'text-gray-500 text-xs', render: m => m.path || '-' },
+          { key: 'permission', title: t('menus.permission'), label: t('menus.permission'), render: m => <Badge className="font-mono">{m.permission || '-'}</Badge> },
+          { key: 'icon', title: t('menus.icon'), label: t('menus.icon'), className: 'text-gray-500 text-xs', render: m => m.icon || '-' },
+          { key: 'sort', title: t('menus.sort'), label: t('menus.sort'), className: 'text-gray-500' },
+          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: m => (
+            <div className="flex items-center justify-end gap-1">
+              {!m.parent_id && (
+                <IconButton tone="success" label={t('menus.add_child')} onClick={() => openCreate(m.id)}><Plus aria-hidden="true" className="w-4 h-4" /></IconButton>
+              )}
+              <IconButton tone="primary" label={t('common.edit')} onClick={() => openEdit(m)}><Pencil aria-hidden="true" className="w-4 h-4" /></IconButton>
+              <IconButton tone="danger" label={t('common.delete')} onClick={() => setDelId(m.id)}><Trash2 aria-hidden="true" className="w-4 h-4" /></IconButton>
+            </div>
+          ) },
+        ]}
+      />
 
       <Dialog open={dialog.open} onOpenChange={v => !v && setDialog(p => ({ ...p, open: false }))}>
         <DialogContent>
@@ -199,44 +189,35 @@ export const MenusPage: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.name')}</label>
-                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('menus.name')} />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.icon')}</label>
-                <Input value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder={t('menus.icon_hint')} />
-              </div>
+              <FormField label={t('menus.name')}>{id => (
+                <Input id={id} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('menus.name')} />
+              )}</FormField>
+              <FormField label={t('menus.icon')}>{id => (
+                <Input id={id} value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder={t('menus.icon_hint')} />
+              )}</FormField>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.route')}</label>
-                <Input value={form.path} onChange={e => setForm(f => ({ ...f, path: e.target.value }))} placeholder="/users" />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.permission')}</label>
-                <Input value={form.permission} onChange={e => setForm(f => ({ ...f, permission: e.target.value }))} placeholder="users:list" />
-              </div>
+              <FormField label={t('menus.route')}>{id => (
+                <Input id={id} value={form.path} onChange={e => setForm(f => ({ ...f, path: e.target.value }))} placeholder="/users" />
+              )}</FormField>
+              <FormField label={t('menus.permission')}>{id => (
+                <Input id={id} value={form.permission} onChange={e => setForm(f => ({ ...f, permission: e.target.value }))} placeholder="users:list" />
+              )}</FormField>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.parent')}</label>
-                <select
+              <FormField label={t('menus.parent')}>{() => (
+                <Select
                   value={form.parent_id}
-                  onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {parentOptions.filter(o => o.id !== dialog.menu?.id).map(o => (
-                    <option key={o.id} value={o.id === 0 ? '' : o.id}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">{t('menus.sort')}</label>
-                <Input type="number" value={form.sort} onChange={e => setForm(f => ({ ...f, sort: Number(e.target.value) }))} />
-              </div>
+                  onValueChange={parent_id => setForm(f => ({ ...f, parent_id }))}
+                  aria-label={t('menus.parent')}
+                  options={parentOptions.filter(o => o.id !== dialog.menu?.id).map(o => ({ value: o.id === 0 ? '' : String(o.id), label: o.label }))}
+                />
+              )}</FormField>
+              <FormField label={t('menus.sort')}>{id => (
+                <Input id={id} type="number" value={form.sort} onChange={e => setForm(f => ({ ...f, sort: Number(e.target.value) }))} />
+              )}</FormField>
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <Alert>{error}</Alert>}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialog({ open: false, mode: 'create' })}>{t('common.cancel')}</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? t('menus.saving') : t('common.save')}</Button>
@@ -245,16 +226,13 @@ export const MenusPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!delId} onOpenChange={v => !v && setDelId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t('common.confirm_delete')}</DialogTitle></DialogHeader>
-          <p className="text-gray-500 text-sm py-2 break-words">{t('menus.delete_hint')}</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDelId(null)}>{t('common.cancel')}</Button>
-            <Button variant="destructive" onClick={handleDelete}>{t('common.confirm_delete')}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!delId}
+        onOpenChange={v => !v && setDelId(null)}
+        onConfirm={handleDelete}
+        description={t('menus.delete_hint')}
+        destructive
+      />
     </div>
   )
 }

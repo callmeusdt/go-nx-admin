@@ -3,6 +3,7 @@ import { sessionFetch } from '../../lib/session'
 import { useI18n } from '../../contexts/i18n-context'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
+import { Alert } from '../ui/alert'
 
 const bytes = (value: string) => new TextEncoder().encode(value).length
 
@@ -71,7 +72,7 @@ export const PasswordForm: React.FC<Props> = ({ mfaEnabled, onChanged, onCancel,
         <Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} aria-label={t('account.mfa_code')} placeholder={t('account.mfa_code')} value={code} onChange={e => setCode(e.target.value)} />
       )}
       <p className="text-xs text-gray-400">{t('password.policy')}</p>
-      {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
+      {error && <Alert>{error}</Alert>}
       <div className="flex justify-end gap-2">
         {onCancel && <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>{cancelLabel ?? t('common.cancel')}</Button>}
         <Button type="submit" disabled={busy}>{busy ? t('users.saving') : t('password.submit')}</Button>
