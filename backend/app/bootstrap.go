@@ -2,7 +2,10 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
+	"strings"
+	"sync"
 
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -11,11 +14,24 @@ import (
 
 var ErrAdminAlreadyInitialized = errors.New("app: administrators already initialized")
 
-// BootstrapAdmin initializes an explicitly migrated, empty PostgreSQL admin
-// schema. Credentials come from the caller; it never resets existing accounts.
+var bootstrapTables = []string{"admin_users", "admin_roles", "admin_menus", "admin_role_menus", "admin_casbin_rule"}
+
+// bootstrapMu serializes bootstrap calls inside one process; SQLite has no
+// table-level lock that blocks a concurrent reader from seeing an empty schema.
+var bootstrapMu sync.Mutex
+
+// BootstrapAdmin initializes an explicitly migrated, empty admin schema on
+// PostgreSQL, MySQL/MariaDB or SQLite. Credentials come from the caller; it
+// never resets existing accounts.
 func BootstrapAdmin(db *gorm.DB, username, password string) error {
-	if db == nil || db.Dialector.Name() != "postgres" {
-		return errors.New("app: bootstrap requires PostgreSQL")
+	if db == nil {
+		return errors.New("app: bootstrap requires a database")
+	}
+	dialect := db.Dialector.Name()
+	switch dialect {
+	case "postgres", "mysql", "sqlite":
+	default:
+		return fmt.Errorf("app: bootstrap does not support %q", dialect)
 	}
 	if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$`).MatchString(username) || len(password) < 8 || len(password) > 32 {
 		return errors.New("app: username must be 3-64 account characters and password 8-32 bytes")
@@ -24,12 +40,43 @@ func BootstrapAdmin(db *gorm.DB, username, password string) error {
 	if err != nil {
 		return errors.New("app: password hashing failed")
 	}
+	if dialect == "mysql" {
+		// A named lock held on one pinned connection spans the whole transaction;
+		// MySQL cannot lock empty tables transactionally.
+		return db.Connection(func(conn *gorm.DB) error {
+			var got int
+			if err := conn.Raw("SELECT GET_LOCK('nx_bootstrap_admin', 30)").Scan(&got).Error; err != nil {
+				return err
+			}
+			if got != 1 {
+				return errors.New("app: bootstrap lock timeout")
+			}
+			defer conn.Exec("DO RELEASE_LOCK('nx_bootstrap_admin')")
+			return bootstrapAdmin(conn, dialect, username, string(hash))
+		})
+	}
+	if dialect == "sqlite" {
+		bootstrapMu.Lock()
+		defer bootstrapMu.Unlock()
+	}
+	return bootstrapAdmin(db, dialect, username, string(hash))
+}
+
+func bootstrapAdmin(db *gorm.DB, dialect, username, hash string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		// Serialize bootstrap in the target schema, including concurrent calls.
-		if err := tx.Exec("LOCK TABLE admin_users, admin_roles, admin_menus, admin_role_menus, admin_casbin_rule IN EXCLUSIVE MODE").Error; err != nil {
-			return err
+		switch dialect {
+		case "postgres":
+			if err := tx.Exec("LOCK TABLE " + strings.Join(bootstrapTables, ", ") + " IN EXCLUSIVE MODE").Error; err != nil {
+				return err
+			}
+		case "sqlite":
+			// A no-op write takes SQLite's write lock before the emptiness check.
+			if err := tx.Exec("UPDATE admin_roles SET id = id WHERE 1 = 0").Error; err != nil {
+				return err
+			}
 		}
-		for _, table := range []string{"admin_users", "admin_roles", "admin_menus", "admin_role_menus", "admin_casbin_rule"} {
+		for _, table := range bootstrapTables {
 			var count int64
 			if err := tx.Table(table).Count(&count).Error; err != nil {
 				return err
@@ -42,7 +89,7 @@ func BootstrapAdmin(db *gorm.DB, username, password string) error {
 		if err := tx.Create(&role).Error; err != nil {
 			return err
 		}
-		user := models.User{Username: username, Password: string(hash), Status: 1, RoleID: role.ID}
+		user := models.User{Username: username, Password: hash, Status: 1, RoleID: role.ID}
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}

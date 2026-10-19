@@ -5,45 +5,100 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
+// bootstrapTarget opens an isolated, empty database per dialect. PostgreSQL and
+// MySQL/MariaDB run only when their DSN is configured; SQLite always runs.
+func bootstrapTarget(t *testing.T, dialect string) *gorm.DB {
+	t.Helper()
+	switch dialect {
+	case "sqlite":
+		db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "bootstrap.db")+"?_busy_timeout=5000"), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, _ := db.DB()
+		t.Cleanup(func() { p.Close() })
+		return db
+	case "mysql":
+		dsn := os.Getenv("NX_TEST_MYSQL_DSN")
+		if dsn == "" {
+			t.Skip("NX_TEST_MYSQL_DSN required")
+		}
+		cfg, err := mysqldriver.ParseDSN(dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		admin, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("nx_bootstrap_%d", time.Now().UnixNano())
+		if err := admin.Exec("CREATE DATABASE " + name + " CHARACTER SET utf8mb4").Error; err != nil {
+			t.Fatal(err)
+		}
+		ap, _ := admin.DB()
+		t.Cleanup(func() { admin.Exec("DROP DATABASE " + name); ap.Close() })
+		cfg.DBName = name
+		db, err := gorm.Open(mysql.Open(cfg.FormatDSN()), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, _ := db.DB()
+		t.Cleanup(func() { p.Close() })
+		return db
+	default:
+		dsn := os.Getenv("NX_TEST_DATABASE_DSN")
+		if dsn == "" {
+			t.Skip("NX_TEST_DATABASE_DSN required")
+		}
+		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pool, _ := db.DB()
+		schema := fmt.Sprintf("nx_bootstrap_%d", time.Now().UnixNano())
+		if err := db.Exec("CREATE SCHEMA " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Exec("DROP SCHEMA " + schema + " CASCADE"); pool.Close() })
+		u, err := url.Parse(dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		query := u.Query()
+		query.Set("search_path", schema)
+		u.RawQuery = query.Encode()
+		target, err := gorm.Open(postgres.Open(u.String()), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tp, _ := target.DB()
+		t.Cleanup(func() { tp.Close() })
+		return target
+	}
+}
+
 func TestBootstrapAdminConcurrentAndNonDestructive(t *testing.T) {
-	dsn := os.Getenv("NX_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("NX_TEST_DATABASE_DSN required")
+	for _, dialect := range []string{"postgres", "mysql", "sqlite"} {
+		t.Run(dialect, func(t *testing.T) { testBootstrapAdmin(t, bootstrapTarget(t, dialect)) })
 	}
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	pool, _ := db.DB()
-	defer pool.Close()
-	schema := fmt.Sprintf("nx_bootstrap_%d", time.Now().UnixNano())
-	if err := db.Exec("CREATE SCHEMA " + schema).Error; err != nil {
-		t.Fatal(err)
-	}
-	defer db.Exec("DROP SCHEMA " + schema + " CASCADE")
-	u, err := url.Parse(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	query := u.Query()
-	query.Set("search_path", schema)
-	u.RawQuery = query.Encode()
-	target, err := gorm.Open(postgres.Open(u.String()), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tp, _ := target.DB()
-	defer tp.Close()
+}
+
+func testBootstrapAdmin(t *testing.T, target *gorm.DB) {
+	t.Helper()
 	if err := MigrateSchema(target); err != nil {
 		t.Fatal(err)
 	}

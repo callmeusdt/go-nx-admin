@@ -7,7 +7,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 - 后端:`cd backend && go build ./... && go vet ./... && go test -race ./...`
 - 前端:`cd frontend && npx tsc --noEmit -p . && npx vite build`
 - 完整构建:`make build`(前端嵌入 `backend/cmd/frontend/dist/`,产物 `nx-admin`);启动 `./nx-admin serve`(会迁移并写种子)。
-- 可选 PostgreSQL 回归:`NX_TEST_DATABASE_DSN` / `NX_TEST_POSTGRES_DSN`。
+- 可选数据库回归:PostgreSQL `NX_TEST_DATABASE_DSN` / `NX_TEST_POSTGRES_DSN`,MySQL/MariaDB `NX_TEST_MYSQL_DSN`(go-sql-driver 格式,如 `root@unix(/run/mysqld/mysqld.sock)/?parseTime=true`);SQLite 始终运行。
 
 ## 后端
 
@@ -16,7 +16,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`;`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
 | `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期;`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
-| `bootstrap.go` | `BootstrapAdmin` |
+| `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
 | `static.go` | 前端静态服务;每次请求重渲染 index.html 注入 `site.title`/favicon,`/_site/favicon` 提供本地 favicon;`assets/favicon.svg` 为内置牛图标 |
 | `*_test.go` | `bearer_test`/`browser_test`(Cookie+MFA)/`batch_test`/`password_test`(改密、强制改密、客户端 IP、仪表盘合并、`/auth/permissions`)/`media_test`/`static_test`/`runtime_*` |
 
