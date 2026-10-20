@@ -97,3 +97,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 
 ## 已知未覆盖(有意搁置)
 密码过期/复杂度策略、登录设备管理、部门/岗位、数据范围权限、字典、多角色用户、导入导出、通知、定时任务、监控、SSO/OAuth2/LDAP、邮件/短信、WebSocket/SSE、Dockerfile/CI、版本化迁移、结构化日志/指标、多租户、字段级审计。
+
+## 角色策略保存校验
+
+`backend/internal/handlers/crud.go` 的 SaveRolePolicies 在移除旧策略前验证完整字段长度（原生适配器varchar(100)）及正则结构；使用原生UpdateFilteredPolicies在适配器事务内替换单角色，存储失败返回脱敏500，成功提交后才更新内存政策；不再全表SavePolicy。非法输入或插入失败均保留原授权；真实MariaDB故障注入另见集成报告。聚焦回归：`go test -race ./internal/handlers -run TestSaveRolePolicies`（backend目录）。

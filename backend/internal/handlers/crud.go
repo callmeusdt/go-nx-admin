@@ -3,6 +3,7 @@ package handlers
 import (
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -675,21 +676,45 @@ func SaveRolePolicies(e *casbin.Enforcer) fiber.Handler {
 			expanded := models.ExpandPermissionKeys(req.Keys)
 			policies = make([][]string, 0, len(expanded))
 			for _, p := range expanded {
-				if len(p) >= 2 {
-					policies = append(policies, []string{p[1], p[0]})
+				if len(p) != 2 {
+					return c.Status(400).JSON(fiber.Map{"message": "invalid policy"})
 				}
+				policies = append(policies, []string{p[1], p[0]})
 			}
 		}
 
-		e.RemoveFilteredPolicy(0, role)
-		for _, policy := range policies {
-			if len(policy) < 2 {
-				continue
-			}
-			e.AddPolicy(role, policy[0], policy[1])
+		// The native adapter stores each field in varchar(100). Validate the
+		// complete replacement before removing any existing authorization.
+		if role == "" || len(role) > 100 {
+			return c.Status(400).JSON(fiber.Map{"message": "invalid role"})
 		}
-		if err := e.SavePolicy(); err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+		for _, policy := range policies {
+			if len(policy) != 2 {
+				return c.Status(400).JSON(fiber.Map{"message": "invalid policy"})
+			}
+			for _, field := range policy {
+				if field == "" || len(field) > 100 {
+					return c.Status(400).JSON(fiber.Map{"message": "invalid policy"})
+				}
+				if _, err := regexp.Compile(field); err != nil {
+					return c.Status(400).JSON(fiber.Map{"message": "invalid policy"})
+				}
+			}
+		}
+		// The native adapter replaces this role's rows in one transaction.
+		// Casbin updates its live model only after the adapter has committed.
+		// Avoid SavePolicy: that rewrites unrelated roles as well.
+		replacement := make([][]string, 0, len(policies))
+		seen := make(map[[2]string]bool, len(policies))
+		for _, policy := range policies {
+			key := [2]string{policy[0], policy[1]}
+			if !seen[key] {
+				replacement = append(replacement, []string{role, policy[0], policy[1]})
+				seen[key] = true
+			}
+		}
+		if _, err := e.UpdateFilteredPolicies(replacement, 0, role); err != nil {
+			return c.Status(500).JSON(fiber.Map{"message": "policy storage unavailable"})
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
