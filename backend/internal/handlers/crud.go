@@ -29,7 +29,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 			q = q.Where("role_id = ?", roleID)
 		}
 		if err := q.Find(&users).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 
 		var onlineUsers []models.OnlineUser
@@ -42,7 +42,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 				onlineUsers = append(onlineUsers, models.OnlineUser{ID: session.ID, UserID: session.UserID, Token: session.TokenHash, IP: session.IP, UserAgent: session.UserAgent, LoginAt: session.CreatedAt, UpdatedAt: session.CreatedAt})
 			}
 		} else if err := db.Find(&onlineUsers).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		currentToken, _ := c.Locals("token").(string)
 		onlineByUserID := make(map[uint][]fiber.Map, len(onlineUsers))
@@ -103,11 +103,11 @@ func CreateUser(db *gorm.DB) fiber.Handler {
 		}
 		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return internalError(c, err)
 		}
 		user := models.User{Username: req.Username, Password: string(hashed), RoleID: req.RoleID, Status: 1, MustChangePassword: req.MustChangePassword}
 		if err := db.Create(&user).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": user})
 	}
@@ -136,7 +136,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			}
 			hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 			if err != nil {
-				return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+				return internalError(c, err)
 			}
 			updates["password"] = string(hashed)
 		}
@@ -156,7 +156,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			return nil
 		})
 		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -176,7 +176,9 @@ func DeleteUser(db *gorm.DB) fiber.Handler {
 func ListRoles(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var roles []models.Role
-		db.Find(&roles)
+		if err := db.Find(&roles).Error; err != nil {
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"data": roles})
 	}
 }
@@ -192,7 +194,7 @@ func CreateRole(db *gorm.DB) fiber.Handler {
 		}
 		role := models.Role{Name: req.Name, Slug: req.Slug, IsSystem: false}
 		if err := db.Create(&role).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": role})
 	}
@@ -211,7 +213,7 @@ func UpdateRole(db *gorm.DB) fiber.Handler {
 		if err := db.Model(&models.Role{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"name": req.Name, "slug": req.Slug,
 		}).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -236,7 +238,7 @@ func ListMenus(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var all []models.Menu
 		if err := db.Order("sort asc").Order("id asc").Find(&all).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": buildMenuTree(all)})
 	}
@@ -274,7 +276,7 @@ func CreateMenu(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
 		if err := db.Create(&menu).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": menu})
 	}
@@ -291,7 +293,7 @@ func UpdateMenu(db *gorm.DB) fiber.Handler {
 			"name": req.Name, "path": req.Path, "icon": req.Icon,
 			"permission": req.Permission, "sort": req.Sort, "parent_id": req.ParentID,
 		}).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -319,10 +321,10 @@ func DeleteMenu(db *gorm.DB) fiber.Handler {
 
 		ids, err := collectIDs(uint(id))
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		if err := db.Delete(&models.Menu{}, ids).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -351,10 +353,12 @@ func ListAuditLogs(db *gorm.DB) fiber.Handler {
 			query = query.Where("created_at <= ?", end)
 		}
 		var total int64
-		query.Count(&total)
+		if err := query.Count(&total).Error; err != nil {
+			return dbError(c, err)
+		}
 		page, pageSize, offset := pagination(c)
 		if err := query.Order("created_at desc").Order("id desc").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": logs, "total": total, "page": page, "page_size": pageSize})
 	}
@@ -364,7 +368,7 @@ func ListApis(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var apis []models.Api
 		if err := db.Order(clause.OrderByColumn{Column: clause.Column{Name: "group"}}).Order("id desc").Find(&apis).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": apis})
 	}
@@ -377,7 +381,7 @@ func CreateApi(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
 		if err := db.Create(&api).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": api})
 	}
@@ -394,7 +398,7 @@ func UpdateApi(db *gorm.DB) fiber.Handler {
 			"group": req.Group, "name": req.Name, "path": req.Path,
 			"method": req.Method, "description": req.Description,
 		}).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -431,10 +435,12 @@ func ListLoginLogs(db *gorm.DB) fiber.Handler {
 			query = query.Where("created_at <= ?", end)
 		}
 		var total int64
-		query.Count(&total)
+		if err := query.Count(&total).Error; err != nil {
+			return dbError(c, err)
+		}
 		page, pageSize, offset := pagination(c)
 		if err := query.Order("created_at desc").Order("id desc").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": logs, "total": total, "page": page, "page_size": pageSize})
 	}
@@ -471,7 +477,9 @@ func ListOnlineUsers(db *gorm.DB) fiber.Handler {
 			return c.JSON(fiber.Map{"data": items, "total": total, "page": page, "page_size": size})
 		}
 		var users []models.OnlineUser
-		db.Order("updated_at desc").Find(&users)
+		if err := db.Order("updated_at desc").Find(&users).Error; err != nil {
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"data": users})
 	}
 }
@@ -517,7 +525,7 @@ func MyMenus(db *gorm.DB) fiber.Handler {
 
 		var all []models.Menu
 		if err := query.Find(&all).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": buildMenuTree(all)})
 	}
@@ -528,7 +536,7 @@ func RoleMenuIDs(db *gorm.DB) fiber.Handler {
 		roleID, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		var rows []models.RoleMenu
 		if err := db.Where("role_id = ?", roleID).Find(&rows).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		ids := make([]uint, 0, len(rows))
 		for _, row := range rows {
@@ -559,7 +567,7 @@ func SaveRoleMenus(db *gorm.DB) fiber.Handler {
 			}
 			return nil
 		}); err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -600,7 +608,7 @@ func ListUserIPWhitelists(db *gorm.DB) fiber.Handler {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		var rules []models.UserIPWhitelist
 		if err := db.Where("user_id = ?", uint(id)).Order("id desc").Find(&rules).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": rules})
 	}
@@ -619,7 +627,7 @@ func CreateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "ip required"})
 		}
 		if err := db.Create(&rule).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": rule})
 	}
@@ -635,7 +643,7 @@ func UpdateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 		if err := db.Model(&models.UserIPWhitelist{}).Where("id = ?", wid).Updates(map[string]interface{}{
 			"ip": req.IP, "remark": req.Remark, "enabled": req.Enabled,
 		}).Error; err != nil {
-			return c.Status(400).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}

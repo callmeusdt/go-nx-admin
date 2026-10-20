@@ -21,11 +21,11 @@ func OpenDatabase(cfg *config.Config) (*gorm.DB, error) {
 	)
 	switch cfg.Database.Driver {
 	case "mysql":
-		db, err = gorm.Open(mysql.Open(cfg.Database.DSN), &gorm.Config{})
+		db, err = gorm.Open(mysql.Open(cfg.Database.DSN), gormConfig())
 	case "postgres":
-		db, err = gorm.Open(postgres.Open(cfg.Database.DSN), &gorm.Config{})
+		db, err = gorm.Open(postgres.Open(cfg.Database.DSN), gormConfig())
 	default:
-		db, err = gorm.Open(sqlite.Open(sqliteDSN(cfg.Database.DSN)), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(sqliteDSN(cfg.Database.DSN)), gormConfig())
 	}
 	if err != nil {
 		return nil, err
@@ -73,3 +73,7 @@ func sqliteDSN(dsn string) string {
 	}
 	return dsn
 }
+
+// gormConfig translates driver errors into GORM's portable ones so handlers can
+// tell a duplicate key from a failure without parsing driver text.
+func gormConfig() *gorm.Config { return &gorm.Config{TranslateError: true} }

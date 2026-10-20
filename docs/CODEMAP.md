@@ -49,6 +49,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `dashboard.go` | `GET /dashboard/stats`;`ExtraDashboardStats`(由 app 层注入)的返回键合并覆盖内置键,扩展 panic 被隔离不影响内置数字 |
 | `media.go` | 上传与媒体管理(走 storage 抽象) |
 | `browser_auth.go`、`browser_enrollment.go` | Cookie 模式登录与 MFA 注册 |
+| `errors.go` | `dbError`/`internalError`:handler 的统一出错出口,原因写日志、响应只回通用文案;唯一键/外键冲突回 409 |
 | `captcha*.go`、`config.go` | 滑块验证码(资源首次使用时懒加载,失败只让该请求 500,不再在包 `init()` 里终止进程)、系统配置 |
 
 ### 关键流程

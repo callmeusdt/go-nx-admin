@@ -135,10 +135,14 @@ func ListMedia(db *gorm.DB) fiber.Handler {
 		}
 
 		var total int64
-		query.Count(&total)
+		if err := query.Count(&total).Error; err != nil {
+			return dbError(c, err)
+		}
 
 		var items []models.Media
-		query.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+		if err := query.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items).Error; err != nil {
+			return dbError(c, err)
+		}
 		for i := range items {
 			items[i] = withURL(c, reg, items[i])
 		}
@@ -165,7 +169,7 @@ func DeleteMedia(db *gorm.DB) fiber.Handler {
 		}
 		drv, err := reg.For(media.Storage)
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return internalError(c, err)
 		}
 		// Remove the object first: if that fails the record stays, so the file
 		// is never orphaned and the delete can be retried.

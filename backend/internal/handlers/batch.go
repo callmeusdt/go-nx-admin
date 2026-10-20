@@ -78,7 +78,7 @@ func BatchDeleteUsers(db *gorm.DB) fiber.Handler {
 
 		var existing []models.User
 		if err := db.Select("id").Where("id IN ?", ids).Find(&existing).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		found := make(map[uint]bool, len(existing))
 		for _, u := range existing {
@@ -141,7 +141,7 @@ func BatchUpdateUserStatus(db *gorm.DB) fiber.Handler {
 
 		var existing []models.User
 		if err := db.Select("id").Where("id IN ?", ids).Find(&existing).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		found := make(map[uint]bool, len(existing))
 		for _, u := range existing {
@@ -195,7 +195,7 @@ func BatchDeleteRoles(db *gorm.DB) fiber.Handler {
 		}
 		var roles []models.Role
 		if err := db.Where("id IN ?", ids).Find(&roles).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		byID := make(map[uint]models.Role, len(roles))
 		for _, r := range roles {
@@ -236,7 +236,7 @@ func BatchDeleteApis(db *gorm.DB) fiber.Handler {
 		}
 		var existing []models.Api
 		if err := db.Select("id").Where("id IN ?", ids).Find(&existing).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		found := make(map[uint]bool, len(existing))
 		for _, a := range existing {
@@ -271,7 +271,7 @@ func BatchDeleteMedia(db *gorm.DB) fiber.Handler {
 		}
 		var items []models.Media
 		if err := db.Where("id IN ?", ids).Find(&items).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		byID := make(map[uint]models.Media, len(items))
 		for _, m := range items {

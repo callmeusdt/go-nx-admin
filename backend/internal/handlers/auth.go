@@ -184,7 +184,7 @@ func MFASetup(db *gorm.DB) fiber.Handler {
 		}
 		user.MFASecret = key.Secret()
 		if err := db.Save(&user).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"secret": key.Secret(), "url": key.URL()})
 	}
@@ -221,7 +221,7 @@ func MFAEnable(db *gorm.DB) fiber.Handler {
 		}
 		user.MFARecoveryCodes = strings.Join(hashedCodes, ",")
 		if err := db.Save(&user).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok", "recovery_codes": codes})
 	}
@@ -257,7 +257,7 @@ func MFADisable(db *gorm.DB) fiber.Handler {
 		user.MFASecret = ""
 		user.MFARecoveryCodes = ""
 		if err := db.Save(&user).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -284,7 +284,7 @@ func MFARecoveryCodes(db *gorm.DB) fiber.Handler {
 		}
 		user.MFARecoveryCodes = strings.Join(hashedCodes, ",")
 		if err := db.Save(&user).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"recovery_codes": codes})
 	}
@@ -540,7 +540,7 @@ func ClearUserMFA(db *gorm.DB) fiber.Handler {
 			return nil
 		})
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}

@@ -5,7 +5,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 入口与扩展边界
 
 - 二开后端只能 import 公开的 `go-nx-admin/app`；需跨 module 使用的包不得放 `backend/internal/`。
-- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。`app.Run` 遇启动错误即 `log.Fatal`；`app.RunE(opts)` 返回 error、不终止进程，二者共用同一个 HTTP 栈：`RunE` 做配置、建目录、迁移、种子、策略后，委托 `NewRuntime`（`PublicUploads:true`）并在 SIGINT/SIGTERM 时关停。新增 HTTP 中间件、错误处理、`/health` 等只改 `runtime.go` 一处，不要再往 `app.go` 加分叉。服务端 5xx 的原因只写日志，响应只回通用状态文案。
+- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。`app.Run` 遇启动错误即 `log.Fatal`；`app.RunE(opts)` 返回 error、不终止进程，二者共用同一个 HTTP 栈：`RunE` 做配置、建目录、迁移、种子、策略后，委托 `NewRuntime`（`PublicUploads:true`）并在 SIGINT/SIGTERM 时关停。新增 HTTP 中间件、错误处理、`/health` 等只改 `runtime.go` 一处，不要再往 `app.go` 加分叉。服务端 5xx 的原因只写日志，响应只回通用状态文案：handler 里数据库/库错误一律经 `handlers.dbError`/`internalError`（唯一键冲突回 409 `already exists`，外键回 409，其余 500 `internal error`），不得再写 `c.Status(..).JSON(fiber.Map{"message": err.Error()})`；只有 `checkPasswordPolicy`、批量 id 校验这类自己构造的业务文案才可回显。`app.OpenDatabase` 开启 `TranslateError`；调用方自带 `*gorm.DB` 时 `dbError` 也会按驱动错误码兜底识别。
 - 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录。
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。

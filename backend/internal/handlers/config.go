@@ -11,7 +11,9 @@ import (
 func ListSystemConfigs(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var items []models.SystemConfig
-		db.Order("sort asc").Find(&items)
+		if err := db.Order("sort asc").Find(&items).Error; err != nil {
+			return dbError(c, err)
+		}
 
 		grouped := make(map[string][]models.SystemConfig)
 		for _, item := range items {
@@ -29,7 +31,7 @@ func UpdateSystemConfigs(db *gorm.DB) fiber.Handler {
 		}
 		var items []models.SystemConfig
 		if err := db.Select("key").Find(&items).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		known := make(map[string]bool, len(items))
 		for _, item := range items {
@@ -52,7 +54,7 @@ func UpdateSystemConfigs(db *gorm.DB) fiber.Handler {
 			return nil
 		})
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
