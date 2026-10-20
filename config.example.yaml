@@ -34,14 +34,14 @@ site:
   title: ""                      # browser tab title; empty -> 信息管理系统
   favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
 
+# Deprecated and ignored. The application never sends Access-Control-* headers:
+# configure CORS in the reverse proxy (nginx), otherwise two layers produce
+# duplicated values such as "*, *" that browsers reject. Kept so old files parse.
 cors:
-  # Empty (default): the app sends no CORS headers - let the reverse proxy
-  # (nginx) own CORS. Otherwise list exact origins, comma-separated;
-  # wildcards are rejected.
   origins: ""
 
 # Strict cookie/MFA mode is only supported by app.NewRuntime, with explicit
-# migration/bootstrap and one HTTPS session.origin equal to cors.origins.
+# migration/bootstrap and one HTTPS session.origin.
 # Legacy serve/Run keeps Bearer mode and rejects cookie: true before any writes.
 session:
   cookie: false

@@ -18,13 +18,14 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期;`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
 | `secret.go` | `EnsureJWTSecret(path)`:给 `NewRuntime` 调用方的“生成一次并复用”密钥辅助 |
 | `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
+| `uploads.go` | `/uploads` 挂载与安全响应头;`RequiredDirs` 在 `app.go`,启动先建 data/logs/uploads/SQLite 与密钥文件父目录 |
 | `static.go` | 前端静态服务;每次请求重渲染 index.html 注入 `site.title`/favicon,`/_site/favicon` 提供本地 favicon;`assets/favicon.svg` 为内置牛图标 |
 | `*_test.go` | `bearer_test`/`browser_test`(Cookie+MFA)/`batch_test`/`password_test`(改密、强制改密、客户端 IP、仪表盘合并、`/auth/permissions`)/`media_test`/`static_test`/`runtime_*` |
 
 ### `backend/internal/`
 | 包 | 职责 |
 |---|---|
-| `config/config.go`、`config/validate.go` | 配置结构与默认值、环境变量覆盖(`NX_*`,格式错误返回 error);`Config.Validate()` 由 `Run` 与 `NewRuntime` 共用(JWT 密钥≥32 字节且非已发布默认、CORS 禁通配但允许为空);`config/secret.go` 的 `ResolveJWTSecret` 在密钥未设置时生成并持久化到 `data/jwt.secret`;含 `server.trusted_proxies`/`client_ip_header`、`jwt.access_minutes/refresh_minutes/mfa_minutes`、`site`、`cache`、`upload.driver/s3` |
+| `config/config.go`、`config/validate.go` | 配置结构与默认值、环境变量覆盖(`NX_*`,格式错误返回 error);`Config.Validate()` 由 `Run` 与 `NewRuntime` 共用(JWT 密钥≥32 字节且非已发布默认);`Warnings()` 报告被忽略的废弃项(`cors.origins`);`config/secret.go` 的 `ResolveJWTSecret` 在密钥未设置时生成并持久化到 `data/jwt.secret`;含 `server.trusted_proxies`/`client_ip_header`、`jwt.access_minutes/refresh_minutes/mfa_minutes`、`site`、`cache`、`upload.driver/s3` |
 | `cache/` | `Cache` 接口(Get/Set/GetDel/Del/Incr/TTL)、`ErrMiss`;`memory.go` 默认,`redis.go` 可选;`default.go` 为进程默认实例(`cache.Init`)。登录限流、验证码等共用 |
 | `storage/` | `Storage` 接口(Put/Open/Delete/URL);`local.go`、`s3.go`(minio-go,兼容 S3/MinIO/OSS/COS/R2);`registry.go` 按记录的 `Storage` 列路由,切换驱动后旧文件仍可读 |
 | `routes/routes.go` | 全部 `/api/v1` 路由;`api` 组统一挂 `JWTAuth` + `CasbinMiddleware`;`RegisterWithOptions` 支持 `disableMedia` |

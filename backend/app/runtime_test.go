@@ -140,14 +140,11 @@ func TestRuntimeLoadsWithoutSeedsAndCloses(t *testing.T) {
 func TestRuntimeRejectsUnsafeInputs(t *testing.T) {
 	opts := runtimeOptions(t)
 	for name, mutate := range map[string]func(*RuntimeOptions){
-		"database":         func(o *RuntimeOptions) { o.DB = nil },
-		"port":             func(o *RuntimeOptions) { o.Config.Server.Port = 0 },
-		"host":             func(o *RuntimeOptions) { o.Config.Server.Host = "" },
-		"key":              func(o *RuntimeOptions) { o.Config.JWT.Secret = "short" },
-		"cors":             func(o *RuntimeOptions) { o.Config.CORS.Origins = "*" },
-		"cors-host":        func(o *RuntimeOptions) { o.Config.CORS.Origins = "admin.example.test" },
-		"cors-empty-entry": func(o *RuntimeOptions) { o.Config.CORS.Origins += "," },
-		"uploads":          func(o *RuntimeOptions) { o.PublicUploads = true },
+		"database": func(o *RuntimeOptions) { o.DB = nil },
+		"port":     func(o *RuntimeOptions) { o.Config.Server.Port = 0 },
+		"host":     func(o *RuntimeOptions) { o.Config.Server.Host = "" },
+		"key":      func(o *RuntimeOptions) { o.Config.JWT.Secret = "short" },
+		"uploads":  func(o *RuntimeOptions) { o.PublicUploads = true },
 	} {
 		t.Run(name, func(t *testing.T) {
 			copy := opts
@@ -233,17 +230,20 @@ func TestConfigLoadReportsBadInputAndValidates(t *testing.T) {
 		t.Fatalf("empty cors.origins must be allowed: %v", err)
 	}
 
-	t.Setenv("NX_CORS_ORIGINS", "*")
-	cfg, _ = config.Load()
-	cfg.ResolveJWTSecret()
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("wildcard CORS accepted")
-	}
-	t.Setenv("NX_CORS_ORIGINS", "not-an-origin")
-	cfg, _ = config.Load()
-	cfg.ResolveJWTSecret()
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("malformed CORS origin accepted")
+	// cors.origins is inert: any value must still load and validate, but warn.
+	for _, v := range []string{"*", "not-an-origin", "https://admin.example.test"} {
+		t.Setenv("NX_CORS_ORIGINS", v)
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.ResolveJWTSecret()
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("stale cors.origins=%q must not block startup: %v", v, err)
+		}
+		if len(cfg.Warnings()) == 0 {
+			t.Fatalf("cors.origins=%q is ignored and must be reported", v)
+		}
 	}
 	t.Setenv("NX_CORS_ORIGINS", "")
 
@@ -424,43 +424,30 @@ func TestRuntimeUsesSharedConfigValidation(t *testing.T) {
 	}
 }
 
-// With CORS owned by a proxy, no CORS headers may be emitted by the app, and
-// Fiber's implicit "*" must not appear.
-func TestEmptyCORSSendsNoCORSHeaders(t *testing.T) {
-	h := newBearerHarness(t, func(o *RuntimeOptions) { o.Config.CORS.Origins = "" })
-	req := httptest.NewRequest("GET", "/health", nil)
-	req.Header.Set("Origin", "https://evil.example")
-	res, err := h.r.App.Test(req, 5000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
-	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
-		t.Fatalf("empty cors.origins still emitted Allow-Origin %q", got)
-	}
-	pre := httptest.NewRequest("OPTIONS", "/api/v1/users", nil)
-	pre.Header.Set("Origin", "https://evil.example")
-	pre.Header.Set("Access-Control-Request-Method", "GET")
-	res2, err := h.r.App.Test(pre, 5000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res2.Body.Close()
-	if res2.Header.Get("Access-Control-Allow-Origin") != "" {
-		t.Fatal("preflight was granted although no origin is configured")
-	}
-}
-
-func TestConfiguredCORSStillApplies(t *testing.T) {
-	h := newBearerHarness(t, nil)
-	req := httptest.NewRequest("GET", "/health", nil)
-	req.Header.Set("Origin", "https://admin.example.test")
-	res, err := h.r.App.Test(req, 5000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
-	if res.Header.Get("Access-Control-Allow-Origin") != "https://admin.example.test" {
-		t.Fatalf("configured origin not allowed: %v", res.Header)
+// CORS belongs to the reverse proxy. If the app also set Access-Control-*
+// headers, the browser would see duplicated values ("*, *") and reject them,
+// so the application must never emit any - whatever cors.origins says.
+func TestApplicationNeverEmitsCORSHeaders(t *testing.T) {
+	for name, origins := range map[string]string{"empty": "", "configured": "https://admin.example.test", "wildcard": "*"} {
+		t.Run(name, func(t *testing.T) {
+			h := newBearerHarness(t, func(o *RuntimeOptions) { o.Config.CORS.Origins = origins })
+			for _, tc := range []struct{ method, path string }{
+				{"GET", "/health"}, {"OPTIONS", "/api/v1/users"}, {"POST", "/api/v1/auth/login"}, {"GET", "/"},
+			} {
+				req := httptest.NewRequest(tc.method, tc.path, nil)
+				req.Header.Set("Origin", "https://evil.example")
+				req.Header.Set("Access-Control-Request-Method", "GET")
+				res, err := h.r.App.Test(req, 5000)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for k := range res.Header {
+					if strings.HasPrefix(strings.ToLower(k), "access-control-") {
+						t.Fatalf("%s %s emitted %s: %v", tc.method, tc.path, k, res.Header[k])
+					}
+				}
+				res.Body.Close()
+			}
+		})
 	}
 }

@@ -237,7 +237,7 @@ func TestStrictCookieEnrollmentAndMFA(t *testing.T) {
 }
 
 func TestCookieRuntimeRejectsInvalidOrigins(t *testing.T) {
-	for _, origin := range []string{"", "http://admin.example.test", "https://evil.test", "https://admin.example.test/", "https://admin.example.test?query=1"} {
+	for _, origin := range []string{"", "http://admin.example.test", "https://admin.example.test/", "https://admin.example.test?query=1", "https://user@admin.example.test", "admin.example.test"} {
 		t.Run(origin, func(t *testing.T) {
 			opts := runtimeOptions(t)
 			opts.Config.Session.Cookie = true

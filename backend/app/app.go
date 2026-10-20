@@ -8,13 +8,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	fiberLog "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"gorm.io/driver/mysql"
@@ -45,10 +46,44 @@ type Options struct {
 
 type PermissionDef = models.PermissionDef
 
+// RequiredDirs are the directories Run writes into: data (SQLite file and the
+// generated JWT key), logs, uploads, plus the parent of a custom SQLite path
+// or secret file. A fresh deployment has none of them.
+func RequiredDirs(cfg *config.Config) []string {
+	dirs := []string{"data", "logs", cfg.Upload.Dir}
+	if cfg.Database.Driver == "" || cfg.Database.Driver == "sqlite" {
+		if d := filepath.Dir(sqlitePath(cfg.Database.DSN)); d != "" && d != "." {
+			dirs = append(dirs, d)
+		}
+	}
+	if cfg.JWT.SecretFile != "" {
+		if d := filepath.Dir(cfg.JWT.SecretFile); d != "." {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
+// sqlitePath strips the "file:" prefix and "?query" that a SQLite DSN may carry.
+func sqlitePath(dsn string) string {
+	dsn = strings.TrimPrefix(dsn, "file:")
+	if i := strings.IndexByte(dsn, '?'); i >= 0 {
+		dsn = dsn[:i]
+	}
+	return dsn
+}
+
 func Run(opts Options) {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
+	}
+	// Everything the process persists lives under these directories; create
+	// them before anything (the JWT key, SQLite, logs, uploads) needs to write.
+	for _, d := range RequiredDirs(cfg) {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			log.Fatalf("mkdir %s error: %v", d, err)
+		}
 	}
 	if err := cfg.ResolveJWTSecret(); err != nil {
 		log.Fatal(err)
@@ -56,19 +91,15 @@ func Run(opts Options) {
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
+	for _, w := range cfg.Warnings() {
+		log.Printf("config: %s", w)
+	}
 	if cfg.Session.Cookie {
 		log.Fatal("cookie sessions require app.NewRuntime with explicit migration and bootstrap")
 	}
 
 	if err := cache.Init(cfg.Cache); err != nil {
 		log.Fatal("cache init error: ", err)
-	}
-
-	dirs := []string{"data", "logs", cfg.Upload.Dir}
-	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
-			log.Fatalf("mkdir %s error: %v", d, err)
-		}
 	}
 
 	logFile, err := os.OpenFile("logs/app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -142,11 +173,6 @@ func Run(opts Options) {
 		})
 	})
 
-	// An empty list means no CORS headers at all; Fiber would otherwise
-	// substitute "*".
-	if cfg.CORS.Origins != "" {
-		app.Use(cors.New(cors.Config{AllowOrigins: cfg.CORS.Origins}))
-	}
 	app.Use(fiberLog.New(fiberLog.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))

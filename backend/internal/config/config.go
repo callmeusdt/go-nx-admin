@@ -103,6 +103,10 @@ func (j JWTConfig) MFATTL() time.Duration {
 	return time.Duration(minutesOrDefault(j.MFAMinutes, DefaultMFAMinutes)) * time.Minute
 }
 
+// CORSConfig is retained only so existing config files keep parsing. The
+// application never emits Access-Control-* headers: CORS belongs to the
+// reverse proxy, and two layers setting them produce duplicated values such as
+// "*, *" that browsers reject.
 type CORSConfig struct {
 	Origins string `yaml:"origins"`
 }

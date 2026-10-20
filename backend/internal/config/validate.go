@@ -3,8 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 )
 
 // MinJWTSecretLen is the shortest accepted HMAC signing key.
@@ -25,25 +23,15 @@ func (c *Config) Validate() error {
 	if len(c.JWT.Secret) < MinJWTSecretLen || knownWeakSecrets[c.JWT.Secret] {
 		return fmt.Errorf("config: jwt.secret must be at least %d bytes and not a published default (leave it unset to use a generated key)", MinJWTSecretLen)
 	}
-	return c.ValidateCORS()
+	return nil
 }
 
-// ValidateCORS accepts an empty value (no CORS headers are sent, which is what
-// a deployment fronted by a reverse proxy that owns CORS wants). A non-empty
-// value must be exact http(s) origins; wildcards would let any site call the
-// API with a stolen token.
-func (c *Config) ValidateCORS() error {
-	if c.CORS.Origins == "" {
-		return nil
+// Warnings lists settings that are accepted but have no effect, so a stale
+// config file does not silently mislead the operator.
+func (c *Config) Warnings() []string {
+	var w []string
+	if c.CORS.Origins != "" {
+		w = append(w, "cors.origins is ignored: the application sends no Access-Control-* headers; configure CORS in the reverse proxy")
 	}
-	if strings.Contains(c.CORS.Origins, "*") {
-		return errors.New("config: cors.origins must list exact origins (no wildcard); leave it empty to send no CORS headers")
-	}
-	for _, origin := range strings.Split(c.CORS.Origins, ",") {
-		u, err := url.Parse(strings.TrimSpace(origin))
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return errors.New("config: invalid cors origin")
-		}
-	}
-	return nil
+	return w
 }

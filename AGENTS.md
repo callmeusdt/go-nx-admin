@@ -41,7 +41,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 
 ## 认证与安全边界
 
-- 显式runtime可选`Config.Session.Cookie=true`，需单一HTTPS `Session.Origin`等于CORS origins；前端`createApp({sessionMode:'cookie',disabledResources:['media']})`配套。旧Run/serve保留Bearer并拒绝cookie配置，避免隐式默认账号/公开uploads进入严格模式。
+- 显式runtime可选`Config.Session.Cookie=true`，需单一HTTPS `Session.Origin`（同源校验以它为准，不再与CORS配置比较）；前端`createApp({sessionMode:'cookie',disabledResources:['media']})`配套。旧Run/serve保留Bearer并拒绝cookie配置，避免隐式默认账号/公开uploads进入严格模式。
 - Cookie模式使用Secure/HttpOnly会话与CSRF，完整会话8h，待MFA会话5min且只允许精确verify；未注册MFA只开放注册必需端点。业务变更要求5分钟内密码+TOTP重认证，锁屏unlock不延长该授权。仅显式信任loopback代理时读X-BIM-Client-IP，代理必须覆盖该头。
 - 严格模式回归：`go test -race ./...`和`go vet ./...`；`NX_TEST_DATABASE_DSN`启用隔离schema Cookie/MFA PostgreSQL测试，`NX_TEST_POSTGRES_DSN`启用只读启动测试。浏览器测试专用`NX_BROWSER_QA_ADDR`仅用于本地隔离test进程，不是运行配置。
 - `app.BootstrapAdmin(db,username,password)`支持PostgreSQL/MySQL(MariaDB)/SQLite，要求已显式迁移且管理种子表为空；PG表锁、MySQL命名锁、SQLite进程内互斥+写锁保证并发仅一次；密码由调用方传入（8～32字节），不生成默认密码，重复执行返回`ErrAdminAlreadyInitialized`且不修改已有账号。初始化账号尚未MFA注册，须经严格模式注册后才能执行业务。
@@ -69,7 +69,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 配置与运行
 
 - 运行配置用根目录 `config.yaml`，模板为 `config.example.yaml`；环境变量覆盖对应配置。数据库支持 SQLite/MySQL/Postgres，默认 SQLite 路径 `data/nx.db` 相对工作目录。
-- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`jwt.secret` 留空时首次启动自动生成 32 字节随机密钥写入 `jwt.secret_file`（默认 `data/jwt.secret`，0600），之后一直复用；显式值（配置或 `NX_JWT_SECRET`）优先，须≥32字节，已发布的默认值视为未设置。`cors.origins` 允许为空（应用不输出任何 CORS 头，交给 nginx）；非空须为明确 origin，禁通配。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用；`NewRuntime` 不写文件，要同样的“生成一次”行为的二开项目调用 `app.EnsureJWTSecret(path)`。`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
+- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`jwt.secret` 留空时首次启动自动生成 32 字节随机密钥写入 `jwt.secret_file`（默认 `data/jwt.secret`，0600），之后一直复用；显式值（配置或 `NX_JWT_SECRET`）优先，须≥32字节，已发布的默认值视为未设置。应用**不挂** Fiber 的 CORS 中间件、不输出任何 `Access-Control-*` 头（避免与 nginx 叠加出 `*, *` 这类重复值），CORS 一律由反向代理负责；`cors.origins` 仅为兼容旧配置保留，配置了会在启动日志警告“已忽略”。`Run` 启动先创建 `data`、`logs`、上传目录、自定义 SQLite 路径与密钥文件的父目录（`app.RequiredDirs`，`reset-password` 同样先建目录），全新部署无需预建目录。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用；`NewRuntime` 不写文件，要同样的“生成一次”行为的二开项目调用 `app.EnsureJWTSecret(path)`。`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
 - 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `127.0.0.1:19500`（本机验收可设 `NX_SERVER_HOST=172.18.0.1`）；健康入口 `/health`。
 - Vite 默认 `172.18.0.1:5173`，`VITE_HOST` 覆盖 host，`/api` 代理到后端。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
 - 常用入口：`make build-frontend` 构建并复制 embed 资源，`make dev-frontend` 热更新，`make build` 完整构建，`./nx-admin serve` 启动。密码重置命令会写数据，仅在授权内使用。

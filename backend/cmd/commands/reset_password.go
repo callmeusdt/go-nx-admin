@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"log"
 	"math/big"
+	"os"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
@@ -12,6 +13,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"go-nx-admin/app"
 	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/models"
 )
@@ -40,6 +42,12 @@ func ResetPasswordCmd() *cobra.Command {
 			cfg, err := config.Load()
 			if err != nil {
 				log.Fatal(err)
+			}
+			// A fresh deployment has no data directory yet; SQLite cannot create it.
+			for _, d := range app.RequiredDirs(cfg) {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					log.Fatalf("mkdir %s error: %v", d, err)
+				}
 			}
 			var db *gorm.DB
 			switch cfg.Database.Driver {
