@@ -211,7 +211,7 @@ func TestConfigLoadReportsBadInputAndValidates(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	t.Setenv("CONFIG_PATH", "")
-	for _, k := range []string{"NX_JWT_SECRET", "NX_CORS_ORIGINS", "NX_SERVER_PORT", "NX_LOGIN_IP_WHITELIST_ENABLED"} {
+	for _, k := range []string{"NX_JWT_SECRET", "NX_JWT_SECRET_FILE", "NX_CORS_ORIGINS", "NX_SERVER_PORT", "NX_LOGIN_IP_WHITELIST_ENABLED"} {
 		t.Setenv(k, "")
 	}
 
@@ -220,23 +220,50 @@ func TestConfigLoadReportsBadInputAndValidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("defaults (no secret, wildcard CORS) must not validate")
+		t.Fatal("an unresolved (empty) secret must not validate")
 	}
 	if cfg.Server.Host == "172.18.0.1" {
 		t.Fatal("default host must not be a workstation-specific address")
 	}
+	// Unset secret + empty CORS is a valid setup once the secret is resolved.
+	if err := cfg.ResolveJWTSecret(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("empty cors.origins must be allowed: %v", err)
+	}
 
-	t.Setenv("NX_JWT_SECRET", "nx-admin-jwt-secret-2024")
-	t.Setenv("NX_CORS_ORIGINS", "https://admin.example.test")
+	t.Setenv("NX_CORS_ORIGINS", "*")
 	cfg, _ = config.Load()
+	cfg.ResolveJWTSecret()
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("published default secret accepted")
+		t.Fatal("wildcard CORS accepted")
+	}
+	t.Setenv("NX_CORS_ORIGINS", "not-an-origin")
+	cfg, _ = config.Load()
+	cfg.ResolveJWTSecret()
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("malformed CORS origin accepted")
+	}
+	t.Setenv("NX_CORS_ORIGINS", "")
+
+	t.Setenv("NX_JWT_SECRET", "short")
+	cfg, _ = config.Load()
+	if err := cfg.ResolveJWTSecret(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("an explicit but too-short secret must be rejected, not silently replaced")
 	}
 	t.Setenv("NX_JWT_SECRET", strings.Repeat("good-secret-", 3))
 	cfg, err = config.Load()
-	if err != nil || cfg.Validate() != nil {
-		t.Fatalf("valid config rejected: %v %v", err, cfg.Validate())
+	if err != nil || cfg.ResolveJWTSecret() != nil || cfg.Validate() != nil {
+		t.Fatalf("valid config rejected: %v", err)
 	}
+	if cfg.JWT.Secret != strings.Repeat("good-secret-", 3) {
+		t.Fatal("explicit secret was replaced")
+	}
+	t.Setenv("NX_JWT_SECRET", "")
 
 	for name, env := range map[string][2]string{
 		"port":      {"NX_SERVER_PORT", "80a0"},
@@ -261,6 +288,57 @@ func TestConfigLoadReportsBadInputAndValidates(t *testing.T) {
 	}
 	if _, err := config.Load(); err == nil {
 		t.Fatal("malformed YAML silently ignored")
+	}
+}
+
+// The signing key is generated once and then reused, so restarts keep sessions.
+func TestJWTSecretIsGeneratedOnceAndPersisted(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	load := func() *config.Config {
+		cfg := &config.Config{}
+		if err := cfg.ResolveJWTSecret(); err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	first := load()
+	if len(first.JWT.Secret) < config.MinJWTSecretLen {
+		t.Fatalf("generated key too short: %d", len(first.JWT.Secret))
+	}
+	info, err := os.Stat(filepath.Join(dir, "data", "jwt.secret"))
+	if err != nil {
+		t.Fatalf("key not persisted: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("key file mode = %v, want 0600", info.Mode().Perm())
+	}
+	if second := load(); second.JWT.Secret != first.JWT.Secret {
+		t.Fatal("restart generated a different key, which would sign everyone out")
+	}
+
+	// A published default in an old config is ignored in favour of the file.
+	old := &config.Config{JWT: config.JWTConfig{Secret: "nx-admin-jwt-secret-2024"}}
+	if err := old.ResolveJWTSecret(); err != nil || old.JWT.Secret != first.JWT.Secret {
+		t.Fatalf("published default not replaced by the persisted key: %v", err)
+	}
+	// An explicit secret is never overridden and never touches the file.
+	explicit := &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("x", 40)}}
+	if err := explicit.ResolveJWTSecret(); err != nil || explicit.JWT.Secret != strings.Repeat("x", 40) {
+		t.Fatalf("explicit secret changed: %v", err)
+	}
+
+	// A corrupt file is an error, never silently overwritten.
+	custom := filepath.Join(dir, "custom.secret")
+	if err := os.WriteFile(custom, []byte("tiny\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bad := &config.Config{JWT: config.JWTConfig{SecretFile: custom}}
+	if err := bad.ResolveJWTSecret(); err == nil {
+		t.Fatal("unusable secret file accepted")
+	}
+	if b, _ := os.ReadFile(custom); string(b) != "tiny\n" {
+		t.Fatal("unusable secret file was overwritten")
 	}
 }
 
@@ -343,5 +421,46 @@ func TestRuntimeUsesSharedConfigValidation(t *testing.T) {
 	opts.Config.JWT.Secret = "nx-admin-jwt-secret-2024"
 	if _, err := NewRuntime(opts); err == nil {
 		t.Fatal("published default secret accepted by NewRuntime")
+	}
+}
+
+// With CORS owned by a proxy, no CORS headers may be emitted by the app, and
+// Fiber's implicit "*" must not appear.
+func TestEmptyCORSSendsNoCORSHeaders(t *testing.T) {
+	h := newBearerHarness(t, func(o *RuntimeOptions) { o.Config.CORS.Origins = "" })
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	res, err := h.r.App.Test(req, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("empty cors.origins still emitted Allow-Origin %q", got)
+	}
+	pre := httptest.NewRequest("OPTIONS", "/api/v1/users", nil)
+	pre.Header.Set("Origin", "https://evil.example")
+	pre.Header.Set("Access-Control-Request-Method", "GET")
+	res2, err := h.r.App.Test(pre, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res2.Body.Close()
+	if res2.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("preflight was granted although no origin is configured")
+	}
+}
+
+func TestConfiguredCORSStillApplies(t *testing.T) {
+	h := newBearerHarness(t, nil)
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Origin", "https://admin.example.test")
+	res, err := h.r.App.Test(req, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.Header.Get("Access-Control-Allow-Origin") != "https://admin.example.test" {
+		t.Fatalf("configured origin not allowed: %v", res.Header)
 	}
 }

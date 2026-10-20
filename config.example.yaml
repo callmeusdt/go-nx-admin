@@ -20,9 +20,12 @@ database:
   # postgres: host=localhost user=postgres password=xxx dbname=nxadmin port=5432 sslmode=disable
 
 jwt:
-  # REQUIRED. At least 32 random bytes, e.g. `openssl rand -hex 32`.
-  # The server refuses to start with an empty, short or published-default value.
+  # Leave empty (recommended): a random key is generated on first start and kept
+  # in secret_file, so restarts keep sessions valid. Set it (>= 32 bytes, e.g.
+  # `openssl rand -hex 32`, or NX_JWT_SECRET) to share one key across instances.
+  # A short or published-default value is rejected / ignored.
   secret: ""
+  secret_file: data/jwt.secret   # keep this file private (created with mode 0600)
   access_minutes: 30             # access token lifetime
   refresh_minutes: 10080         # refresh token lifetime (7 days)
   mfa_minutes: 5                 # interim token between password and MFA code
@@ -32,8 +35,10 @@ site:
   favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
 
 cors:
-  # REQUIRED. Comma-separated exact origins; wildcards are rejected.
-  origins: "http://127.0.0.1:5173"
+  # Empty (default): the app sends no CORS headers - let the reverse proxy
+  # (nginx) own CORS. Otherwise list exact origins, comma-separated;
+  # wildcards are rejected.
+  origins: ""
 
 # Strict cookie/MFA mode is only supported by app.NewRuntime, with explicit
 # migration/bootstrap and one HTTPS session.origin equal to cors.origins.

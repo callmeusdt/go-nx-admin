@@ -67,7 +67,11 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
+	// Secret signs tokens. Empty means "use the key in SecretFile, generating
+	// it on first start" (see ResolveJWTSecret).
 	Secret string `yaml:"secret"`
+	// SecretFile is where that key is persisted; default data/jwt.secret.
+	SecretFile string `yaml:"secret_file"`
 	// Lifetimes in minutes. Zero falls back to the defaults below.
 	AccessMinutes  int `yaml:"access_minutes"`  // default 30
 	RefreshMinutes int `yaml:"refresh_minutes"` // default 10080 (7 days)
@@ -197,6 +201,7 @@ func Load() (*Config, error) {
 	env.str("NX_DB_DRIVER", &cfg.Database.Driver)
 	env.str("NX_DB_DSN", &cfg.Database.DSN)
 	env.str("NX_JWT_SECRET", &cfg.JWT.Secret)
+	env.str("NX_JWT_SECRET_FILE", &cfg.JWT.SecretFile)
 	env.integer("NX_JWT_ACCESS_MINUTES", &cfg.JWT.AccessMinutes)
 	env.integer("NX_JWT_REFRESH_MINUTES", &cfg.JWT.RefreshMinutes)
 	env.integer("NX_JWT_MFA_MINUTES", &cfg.JWT.MFAMinutes)

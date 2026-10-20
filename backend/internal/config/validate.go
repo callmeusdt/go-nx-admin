@@ -23,16 +23,21 @@ func (c *Config) Validate() error {
 		return errors.New("config: explicit server host and a valid port are required")
 	}
 	if len(c.JWT.Secret) < MinJWTSecretLen || knownWeakSecrets[c.JWT.Secret] {
-		return fmt.Errorf("config: jwt.secret must be at least %d bytes and not a published default", MinJWTSecretLen)
+		return fmt.Errorf("config: jwt.secret must be at least %d bytes and not a published default (leave it unset to use a generated key)", MinJWTSecretLen)
 	}
 	return c.ValidateCORS()
 }
 
-// ValidateCORS requires explicit http(s) origins; wildcards would let any
-// site call the API with a stolen token.
+// ValidateCORS accepts an empty value (no CORS headers are sent, which is what
+// a deployment fronted by a reverse proxy that owns CORS wants). A non-empty
+// value must be exact http(s) origins; wildcards would let any site call the
+// API with a stolen token.
 func (c *Config) ValidateCORS() error {
-	if c.CORS.Origins == "" || strings.Contains(c.CORS.Origins, "*") {
-		return errors.New("config: explicit cors.origins are required (no wildcard)")
+	if c.CORS.Origins == "" {
+		return nil
+	}
+	if strings.Contains(c.CORS.Origins, "*") {
+		return errors.New("config: cors.origins must list exact origins (no wildcard); leave it empty to send no CORS headers")
 	}
 	for _, origin := range strings.Split(c.CORS.Origins, ",") {
 		u, err := url.Parse(strings.TrimSpace(origin))

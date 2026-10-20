@@ -69,11 +69,11 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 配置与运行
 
 - 运行配置用根目录 `config.yaml`，模板为 `config.example.yaml`；环境变量覆盖对应配置。数据库支持 SQLite/MySQL/Postgres，默认 SQLite 路径 `data/nx.db` 相对工作目录。
-- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用：`jwt.secret` 须≥32字节且不是已发布默认值，`cors.origins` 须为明确 origin（禁通配），否则拒绝启动；`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
+- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`jwt.secret` 留空时首次启动自动生成 32 字节随机密钥写入 `jwt.secret_file`（默认 `data/jwt.secret`，0600），之后一直复用；显式值（配置或 `NX_JWT_SECRET`）优先，须≥32字节，已发布的默认值视为未设置。`cors.origins` 允许为空（应用不输出任何 CORS 头，交给 nginx）；非空须为明确 origin，禁通配。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用；`NewRuntime` 不写文件，要同样的“生成一次”行为的二开项目调用 `app.EnsureJWTSecret(path)`。`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
 - 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `127.0.0.1:19500`（本机验收可设 `NX_SERVER_HOST=172.18.0.1`）；健康入口 `/health`。
 - Vite 默认 `172.18.0.1:5173`，`VITE_HOST` 覆盖 host，`/api` 代理到后端。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
 - 常用入口：`make build-frontend` 构建并复制 embed 资源，`make dev-frontend` 热更新，`make build` 完整构建，`./nx-admin serve` 启动。密码重置命令会写数据，仅在授权内使用。
-- 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `NX_SERVER_HOST=172.18.0.1 NX_JWT_SECRET=<32字节以上> NX_CORS_ORIGINS=http://172.18.0.1:8001 go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，初始 admin 密码见启动日志）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
+- 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `NX_SERVER_HOST=172.18.0.1 go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，初始 admin 密码见启动日志）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
 
 ## Submodule 构建
 

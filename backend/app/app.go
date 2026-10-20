@@ -50,6 +50,9 @@ func Run(opts Options) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.ResolveJWTSecret(); err != nil {
+		log.Fatal(err)
+	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
@@ -139,8 +142,11 @@ func Run(opts Options) {
 		})
 	})
 
-	allowOrigins := cfg.CORS.Origins
-	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
+	// An empty list means no CORS headers at all; Fiber would otherwise
+	// substitute "*".
+	if cfg.CORS.Origins != "" {
+		app.Use(cors.New(cors.Config{AllowOrigins: cfg.CORS.Origins}))
+	}
 	app.Use(fiberLog.New(fiberLog.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))

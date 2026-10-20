@@ -100,8 +100,8 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	}
 	if opts.Config.Session.Cookie {
 		u, err := url.Parse(opts.Config.Session.Origin)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || opts.Config.CORS.Origins != opts.Config.Session.Origin {
-			return nil, errors.New("app: cookie sessions require one exact HTTPS origin")
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (opts.Config.CORS.Origins != "" && opts.Config.CORS.Origins != opts.Config.Session.Origin) {
+			return nil, errors.New("app: cookie sessions require one exact HTTPS origin (cors.origins must be empty or equal to it)")
 		}
 	}
 	runtimeGuard.Lock()
@@ -167,7 +167,9 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	handlers.ExtraDashboardStats = opts.Extensions.DashboardStats
 	r.App.Use(fiberRecover.New())
-	r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins, AllowCredentials: opts.Config.Session.Cookie, AllowHeaders: "Content-Type,Authorization,X-CSRF-Token"}))
+	if opts.Config.CORS.Origins != "" {
+		r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins, AllowCredentials: opts.Config.Session.Cookie, AllowHeaders: "Content-Type,Authorization,X-CSRF-Token"}))
+	}
 	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "${status} ${method} ${path}\n"}))
 	r.App.Get("/health", func(c *fiber.Ctx) error {
 		db, err := opts.DB.DB()
