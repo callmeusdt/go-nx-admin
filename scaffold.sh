@@ -192,8 +192,10 @@ cmd/frontend/dist/*
 # Dependencies
 frontend/node_modules/
 
-# Environment
+# Environment (config.yaml and the generated JWT signing key stay private)
 config.yaml
+data/jwt.secret
+*.secret
 
 # Logs / Uploads
 logs/
