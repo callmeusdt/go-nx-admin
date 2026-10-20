@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"log"
 	"strings"
 	"time"
@@ -165,8 +166,8 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 		if len(parts) >= 3 {
 			module = parts[2]
 		}
-		// Fiber strings may alias pooled request buffers. Own every string before
-		// the handler returns so the asynchronous writer cannot observe reuse.
+		// Own pooled request strings. Finish the bounded audit write before this
+		// handler returns so graceful shutdown cannot close the DB ahead of it.
 		record := models.AuditLog{
 			Operator: strings.Clone(username),
 			Title:    method + " " + path,
@@ -178,11 +179,11 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 			Duration: time.Since(start).Microseconds(),
 			Error:    strings.Clone(errMsg),
 		}
-		go func() {
-			if err := db.Create(&record).Error; err != nil {
-				log.Printf("audit log error: %v", err)
-			}
-		}()
+		auditCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if auditErr := db.WithContext(auditCtx).Create(&record).Error; auditErr != nil {
+			log.Printf("audit log error: %v", auditErr)
+		}
 
 		return err
 	}
