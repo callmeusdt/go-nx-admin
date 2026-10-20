@@ -55,6 +55,8 @@ func TestStrictCookieEnrollmentAndMFA(t *testing.T) {
 		}
 		defer p.Close()
 		opts.DB = db
+	} else if os.Getenv("NX_TEST_MYSQL_DSN") != "" {
+		opts.DB = bootstrapTarget(t, "mysql")
 	}
 	opts.Config.Session.Cookie = true
 	opts.Config.Session.Origin = opts.Config.CORS.Origins
