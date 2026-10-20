@@ -32,6 +32,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `storage/` | `Storage` 接口(Put/Open/Delete/URL);`local.go`、`s3.go`(minio-go,兼容 S3/MinIO/OSS/COS/R2);`registry.go` 按记录的 `Storage` 列路由,切换驱动后旧文件仍可读 |
 | `routes/routes.go` | 全部 `/api/v1` 路由;`api` 组统一挂 `JWTAuth` + `CasbinMiddleware`;`RegisterWithOptions` 支持 `disableMedia` |
 | `middleware/` | `jwt.go`(令牌,MFA 临时令牌 `PurposeMFA` 仅可访问 `/mfa/verify`)、`auth.go`(会话校验、`must_change_password` 路由白名单,否则 403 `PASSWORD_CHANGE_REQUIRED`)、`casbin.go`(授权;`anchoredMatch` 整串锚定匹配、`UpgradeWildcardPolicies` 迁移旧 `.*` 策略)、`routes.go`(免令牌/免权限路由的精确 `METHOD /path` 集合)、`browser.go`(Cookie 会话/CSRF/重认证)、`ratelimit.go`、`clientip.go` |
+| `middleware/audit.go` | 审计行的构造辅助:`auditStatus` 按错误处理器会给出的状态记录(handler 返回 error 时响应状态此刻仍是 200),`auditErrorText` 截到 255 字节并保持合法 UTF-8、去控制字符——MySQL/PG 对超长列直接拒写整行,会丢审计 |
 | `middleware/clientip.go` | **客户端 IP 唯一来源** `ClientIP`:对端不在 `trusted_proxies` 时忽略一切头;信任时按 `client_ip_header` 取值,XFF 从右向左跳过受信代理;Cookie 模式沿用 `X-BIM-Client-IP` |
 | `models/models.go` | 用户/角色/菜单/API/日志/在线用户模型与种子;`User.MustChangePassword`;首次种子管理员 `admin` 随机初始密码(日志只打一次)并强制改密 |
 | `models/permissions.go` | 权限定义 `PermissionDefs` + `ExpandPermission`;`AllPermissionDefs`、`GetGrantedPermissionKeys` |

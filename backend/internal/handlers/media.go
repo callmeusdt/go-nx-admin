@@ -125,8 +125,7 @@ func ListMedia(db *gorm.DB) fiber.Handler {
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "storage unavailable"})
 		}
-		page, _ := strconv.Atoi(c.Query("page", "1"))
-		pageSize, _ := strconv.Atoi(c.Query("page_size", "20"))
+		page, pageSize, offset := pagination(c)
 		mediaType := c.Query("type", "")
 
 		query := db.Model(&models.Media{})
@@ -140,7 +139,7 @@ func ListMedia(db *gorm.DB) fiber.Handler {
 		}
 
 		var items []models.Media
-		if err := query.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items).Error; err != nil {
+		if err := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
 			return dbError(c, err)
 		}
 		for i := range items {

@@ -232,11 +232,8 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 
 		username, _ := c.Locals("username").(string)
 		ip := ClientIP(c)
-		status := c.Response().StatusCode()
-		errMsg := ""
-		if err != nil {
-			errMsg = err.Error()
-		}
+		status := auditStatus(c.Response().StatusCode(), err)
+		errMsg := auditErrorText(err)
 		module := "api"
 		parts := strings.Split(strings.Trim(path, "/"), "/")
 		if len(parts) >= 3 {

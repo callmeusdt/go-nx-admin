@@ -2,9 +2,18 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
+
+	"github.com/casbin/casbin/v2"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
+
+	"go-nx-admin/internal/models"
 )
 
 // leakMarkers are fragments of driver and SQL text that must never reach a
@@ -135,5 +144,67 @@ func TestInternalErrorCauseIsLogged(t *testing.T) {
 	}
 	if !strings.Contains(logged.String(), "admin_apis") {
 		t.Fatalf("cause missing from the log: %q", logged.String())
+	}
+}
+
+// A failing handler must leave a correct audit row on every database: the
+// status the client saw, and an error text that fits the column (MySQL and
+// PostgreSQL reject the whole row when it does not).
+func TestAuditRowSurvivesLongErrorsOnEveryDatabase(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			h := newBearerHarnessSeeded(t, func(o *RuntimeOptions) {
+				o.DB = bootstrapTarget(t, dialect)
+				o.Extensions.ExtraRoutes = func(api fiber.Router, _ *gorm.DB, _ *casbin.Enforcer) {
+					api.Get("/zz-long", func(c *fiber.Ctx) error { return errors.New(strings.Repeat("错x", 400)) })
+					api.Get("/zz-teapot", func(c *fiber.Ctx) error { return fiber.NewError(418, "short") })
+				}
+			}, nil)
+			access, _ := h.login()
+			for path, want := range map[string]int{"/api/v1/zz-long": 500, "/api/v1/zz-teapot": 418} {
+				if c, _ := h.do("GET", path, "", access); c != want {
+					t.Fatalf("%s response = %d, want %d", path, c, want)
+				}
+				var rec models.AuditLog
+				for i := 0; i < 50 && rec.ID == 0; i++ {
+					// Find, not First: an absent row is expected while the async writer runs.
+					h.db.Where("path = ?", path).Limit(1).Find(&rec)
+					if rec.ID == 0 {
+						time.Sleep(50 * time.Millisecond)
+					}
+				}
+				if rec.ID == 0 {
+					t.Fatalf("%s: audit row was lost", path)
+				}
+				if rec.Status != want {
+					t.Errorf("%s: audit status %d, want %d", path, rec.Status, want)
+				}
+				if len(rec.Error) > 255 || !utf8.ValidString(rec.Error) {
+					t.Errorf("%s: stored error is not bounded valid text (len %d)", path, len(rec.Error))
+				}
+			}
+		})
+	}
+}
+
+func TestMediaListClampsPagination(t *testing.T) {
+	h := newMediaHarness(t, nil)
+	for i := 0; i < 3; i++ {
+		h.db.Create(&models.Media{OriginalName: "f.txt", FileName: "f.txt", Path: "uploads/f" + itoa(i), URL: "/uploads/f", Storage: "local", Type: "file"})
+	}
+	for _, q := range []string{"page_size=-5", "page_size=0", "page_size=999999", "page=-3", "page=0&page_size=abc", "page=99999999999999999999"} {
+		c, res := h.do("GET", "/api/v1/media?"+q, "", h.token)
+		if c != 200 {
+			t.Fatalf("%s: %d %v", q, c, res)
+		}
+		size, _ := res["page_size"].(float64)
+		page, _ := res["page"].(float64)
+		if size < 1 || size > 200 || page < 1 {
+			t.Errorf("%s: page=%v page_size=%v escaped the limits", q, page, size)
+		}
+	}
+	_, res := h.do("GET", "/api/v1/media?page_size=2&page=2", "", h.token)
+	if items, _ := res["data"].([]any); len(items) != 1 || res["total"].(float64) != 3 {
+		t.Fatalf("page 2 of 3 rows with size 2 = %v", res)
 	}
 }
