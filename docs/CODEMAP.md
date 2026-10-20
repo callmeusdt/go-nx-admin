@@ -8,6 +8,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 - 前端:`cd frontend && npx tsc --noEmit -p . && npx vite build`
 - 完整构建:`make build`(前端嵌入 `backend/cmd/frontend/dist/`,产物 `nx-admin`);启动 `./nx-admin serve`(会迁移并写种子)。
 - 可选数据库回归:PostgreSQL `NX_TEST_DATABASE_DSN` / `NX_TEST_POSTGRES_DSN`,MySQL/MariaDB `NX_TEST_MYSQL_DSN`(go-sql-driver 格式,如 `root@unix(/run/mysqld/mysqld.sock)/?parseTime=true`);SQLite 始终运行。
+- `app/audit_test.go`：授权请求在返回前完成审计写入（独立3秒超时），避免未跟踪goroutine在runtime/pool关闭后丢尾部日志；阻塞INSERT回归覆盖SQLite与显式MySQL隔离库。审计失败不改写已执行业务响应，不提供崩溃持久队列保证。
 
 ## 后端
 
