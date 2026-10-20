@@ -33,10 +33,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: process.env.VITE_HOST || '172.18.0.1',
+    host: process.env.VITE_HOST || '127.0.0.1',
     proxy: {
       '/api': {
-        target: 'http://172.18.0.1:19500',
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:19500',
         changeOrigin: true,
       },
     },

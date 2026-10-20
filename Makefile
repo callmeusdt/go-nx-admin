@@ -3,18 +3,18 @@ FRONTEND_DIR = frontend
 FRONTEND_DIST_DIR = backend/cmd/frontend/dist
 BINARY = nx-admin
 
-.PHONY: all build dev-backend dev-frontend clean
+.PHONY: all build build-frontend build-backend dev-backend dev-backend-air dev-frontend clean
 
 all: build
 
 build-frontend:
-	cd $(FRONTEND_DIR) && npm install && npm run build
-	rm -rf $(FRONTEND_DIST_DIR)
+	cd $(FRONTEND_DIR) && npm ci && npm run build
 	mkdir -p $(FRONTEND_DIST_DIR)
+	find $(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete
 	cp -r $(FRONTEND_DIR)/dist/* $(FRONTEND_DIST_DIR)/
 
 build-backend:
-	cd $(BACKEND_DIR) && go mod tidy && go build -o ../$(BINARY) ./cmd
+	cd $(BACKEND_DIR) && go build -o ../$(BINARY) ./cmd
 
 build: build-frontend build-backend
 
@@ -22,10 +22,11 @@ dev-backend:
 	cd $(BACKEND_DIR) && go run ./cmd
 
 dev-backend-air:
-	cd $(BACKEND_DIR) && air
+	air
 
 dev-frontend:
 	cd $(FRONTEND_DIR) && npm run dev
 
 clean:
-	rm -rf $(BINARY) $(FRONTEND_DIR)/dist $(FRONTEND_DIST_DIR)
+	rm -rf $(BINARY)
+	find $(FRONTEND_DIR)/dist $(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true

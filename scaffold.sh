@@ -132,7 +132,7 @@ FRONTEND_DIR = frontend
 FRONTEND_DIST_DIR = cmd/frontend/dist
 BINARY = ${PROJECT_NAME}
 
-.PHONY: all build dev-backend dev-frontend clean submodule
+.PHONY: all build build-frontend build-backend dev-backend dev-frontend clean submodule upgrade
 
 all: build
 
@@ -140,14 +140,12 @@ submodule:
 	git submodule update --init --recursive
 
 build-frontend:
-	cd \$(FRONTEND_DIR) && npm install && npm run build
-	rm -rf \$(FRONTEND_DIST_DIR)
+	cd \$(FRONTEND_DIR) && (npm ci || npm install) && npm run build
 	mkdir -p \$(FRONTEND_DIST_DIR)
+	find \$(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete
 	cp -r \$(FRONTEND_DIR)/dist/* \$(FRONTEND_DIST_DIR)/
 
 build-backend:
-	cd \$(BACKEND_DIR) && go mod tidy
-	go mod tidy
 	go build -o \$(BINARY) ./cmd
 
 build: build-frontend build-backend
@@ -155,14 +153,12 @@ build: build-frontend build-backend
 dev-backend:
 	go run ./cmd
 
-dev-backend-air:
-	cd \$(BACKEND_DIR) && air
-
 dev-frontend:
 	cd \$(FRONTEND_DIR) && npm run dev
 
 clean:
-	rm -rf \$(BINARY) \$(FRONTEND_DIR)/dist \$(FRONTEND_DIST_DIR)
+	rm -rf \$(BINARY)
+	find \$(FRONTEND_DIR)/dist \$(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
 
 # 升级底座
 upgrade:
@@ -316,10 +312,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: process.env.VITE_HOST || '172.18.0.1',
+    host: process.env.VITE_HOST || '127.0.0.1',
     proxy: {
       '/api': {
-        target: 'http://172.18.0.1:19500',
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:19500',
         changeOrigin: true,
       },
     },
@@ -472,9 +468,8 @@ echo "  -> frontend/src/vite-env.d.ts"
 
 # —— .gitkeep ——
 touch "$FRONTEND_DIR/src/pages/.gitkeep"
-touch "$FRONTEND_DIR/dist/.gitkeep" 2>/dev/null || true
-mkdir -p "$FRONTEND_DIR/dist"
-touch "$FRONTEND_DIR/dist/.gitkeep"
+mkdir -p "$FRONTEND_DIR/dist" cmd/frontend/dist
+touch "$FRONTEND_DIR/dist/.gitkeep" cmd/frontend/dist/.gitkeep
 
 echo ""
 echo "======================================"
