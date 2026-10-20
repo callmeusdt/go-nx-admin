@@ -6,8 +6,22 @@ import { MandarinTraditional } from 'flatpickr/dist/l10n/zh-tw'
 import { Spanish } from 'flatpickr/dist/l10n/es'
 import { Vietnamese } from 'flatpickr/dist/l10n/vn'
 import { useI18n } from '../../contexts/i18n-context'
+import type { CustomLocale } from 'flatpickr/dist/types/locale'
 
-const calendarLocales = { 'zh-CN': Mandarin, 'zh-TW': MandarinTraditional, es: Spanish, vi: Vietnamese }
+const Urdu: CustomLocale = {
+  weekdays: {
+    shorthand: ['اتوار', 'پیر', 'منگل', 'بدھ', 'جمعرات', 'جمعہ', 'ہفتہ'],
+    longhand: ['اتوار', 'پیر', 'منگل', 'بدھ', 'جمعرات', 'جمعہ', 'ہفتہ'],
+  },
+  months: {
+    shorthand: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+    longhand: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+  },
+  rangeSeparator: ' تا ', weekAbbreviation: 'ہفتہ', scrollTitle: 'تبدیل کرنے کے لیے اسکرول کریں',
+  toggleTitle: 'تبدیل کرنے کے لیے کلک کریں', yearAriaLabel: 'سال', monthAriaLabel: 'مہینہ',
+  hourAriaLabel: 'گھنٹہ', minuteAriaLabel: 'منٹ', time_24hr: true,
+}
+const calendarLocales = { 'zh-CN': Mandarin, 'zh-TW': MandarinTraditional, es: Spanish, vi: Vietnamese, ur: Urdu }
 
 interface DateTimeInputProps {
   value: string
