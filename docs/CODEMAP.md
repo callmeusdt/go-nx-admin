@@ -14,9 +14,10 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 ### 公开入口 `backend/app/`
 | 文件 | 内容 |
 |---|---|
-| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`;`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
-| `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期;`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
+| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`(`log.Fatal`)/`RunE`(返回 error,委托 `NewRuntime`,SIGINT/SIGTERM 关停并释放缓存、连接池、日志文件);`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
+| `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期,也是 `Run`/`RunE` 的 HTTP 栈(`errorHandler`、`/health`、日志、静态页只在此一处);`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
 | `secret.go` | `EnsureJWTSecret(path)`:给 `NewRuntime` 调用方的“生成一次并复用”密钥辅助 |
+| `sqlutil.go` | 公开 `ContainsFold`/`EscapeLike`(委托 `internal/dbutil`):大小写不敏感、转义 `%`/`_` 的包含筛选,三库一致 |
 | `database.go` | `OpenDatabase(cfg)`:`Run` 与 `reset-password` 共用的连库与连接池;SQLite 自动补 `_busy_timeout=5000`+WAL(`_pragma` 自管则不动),池上限 8(**不能设 1**:Casbin 适配器在事务内再用外层句柄会死锁) |
 | `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
 | `uploads.go` | `/uploads` 挂载与安全响应头;`RequiredDirs` 在 `app.go`,启动先建 data/logs/uploads/SQLite 与密钥文件父目录 |
@@ -48,7 +49,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `dashboard.go` | `GET /dashboard/stats`;`ExtraDashboardStats`(由 app 层注入)的返回键合并覆盖内置键,扩展 panic 被隔离不影响内置数字 |
 | `media.go` | 上传与媒体管理(走 storage 抽象) |
 | `browser_auth.go`、`browser_enrollment.go` | Cookie 模式登录与 MFA 注册 |
-| `captcha*.go`、`config.go` | 滑块验证码、系统配置 |
+| `captcha*.go`、`config.go` | 滑块验证码(资源首次使用时懒加载,失败只让该请求 500,不再在包 `init()` 里终止进程)、系统配置 |
 
 ### 关键流程
 - **认证**:login → (mfa_required → `/mfa/verify`) → access 30min + refresh 7d → 到期前 `/auth/refresh`。

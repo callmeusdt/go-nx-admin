@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -546,7 +547,12 @@ func ClearUserMFA(db *gorm.DB) fiber.Handler {
 }
 
 func sendCaptchaRequired(c *fiber.Ctx) error {
-	capt, err := slideCapt.Generate()
+	generator, err := slideCaptcha()
+	if err != nil {
+		log.Printf("captcha: %v", err)
+		return c.Status(500).JSON(fiber.Map{"message": "captcha generate failed"})
+	}
+	capt, err := generator.Generate()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"message": "captcha generate failed"})
 	}

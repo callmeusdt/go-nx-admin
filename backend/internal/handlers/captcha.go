@@ -40,7 +40,12 @@ func GenerateCaptcha(c *fiber.Ctx) error {
 	if !config.AppConfig.Captcha.Enabled {
 		return c.JSON(fiber.Map{"captcha_enabled": false})
 	}
-	capt, err := slideCapt.Generate()
+	generator, err := slideCaptcha()
+	if err != nil {
+		log.Printf("captcha: %v", err)
+		return c.Status(500).JSON(fiber.Map{"message": "captcha generate failed"})
+	}
+	capt, err := generator.Generate()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"message": "captcha generate failed"})
 	}

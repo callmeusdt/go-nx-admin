@@ -10,6 +10,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/gofiber/fiber/v2"
 	"go-nx-admin/internal/config"
+	"go-nx-admin/internal/dbutil"
 	"go-nx-admin/internal/middleware"
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -22,7 +23,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		var users []models.User
 		q := db.Preload("Role")
 		if name := strings.TrimSpace(c.Query("username")); name != "" {
-			q = containsFold(q, "username", name)
+			q = dbutil.ContainsFold(q, "username", name)
 		}
 		if roleID := c.QueryInt("role_id", 0); roleID > 0 {
 			q = q.Where("role_id = ?", roleID)
@@ -332,16 +333,16 @@ func ListAuditLogs(db *gorm.DB) fiber.Handler {
 		var logs []models.AuditLog
 		query := db.Model(&models.AuditLog{})
 		if operator := strings.TrimSpace(c.Query("operator")); operator != "" {
-			query = containsFold(query, "operator", operator)
+			query = dbutil.ContainsFold(query, "operator", operator)
 		}
 		if path := strings.TrimSpace(c.Query("path")); path != "" {
-			query = containsFold(query, "path", path)
+			query = dbutil.ContainsFold(query, "path", path)
 		}
 		if method := strings.TrimSpace(c.Query("method")); method != "" {
 			query = query.Where("method = ?", method)
 		}
 		if ip := strings.TrimSpace(c.Query("ip")); ip != "" {
-			query = containsFold(query, "ip", ip)
+			query = dbutil.ContainsFold(query, "ip", ip)
 		}
 		if start := strings.TrimSpace(c.Query("start")); start != "" {
 			query = query.Where("created_at >= ?", start)
@@ -412,16 +413,16 @@ func ListLoginLogs(db *gorm.DB) fiber.Handler {
 		var logs []models.LoginLog
 		query := db.Model(&models.LoginLog{})
 		if username := strings.TrimSpace(c.Query("username")); username != "" {
-			query = containsFold(query, "username", username)
+			query = dbutil.ContainsFold(query, "username", username)
 		}
 		if status := strings.TrimSpace(c.Query("status")); status != "" {
 			query = query.Where("status = ?", status)
 		}
 		if ip := strings.TrimSpace(c.Query("ip")); ip != "" {
-			query = containsFold(query, "ip", ip)
+			query = dbutil.ContainsFold(query, "ip", ip)
 		}
 		if geo := strings.TrimSpace(c.Query("geo")); geo != "" {
-			query = containsFold(query, "geo", geo)
+			query = dbutil.ContainsFold(query, "geo", geo)
 		}
 		if start := strings.TrimSpace(c.Query("start")); start != "" {
 			query = query.Where("created_at >= ?", start)

@@ -5,7 +5,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 入口与扩展边界
 
 - 二开后端只能 import 公开的 `go-nx-admin/app`；需跨 module 使用的包不得放 `backend/internal/`。
-- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。
+- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。`app.Run` 遇启动错误即 `log.Fatal`；`app.RunE(opts)` 返回 error、不终止进程，二者共用同一个 HTTP 栈：`RunE` 做配置、建目录、迁移、种子、策略后，委托 `NewRuntime`（`PublicUploads:true`）并在 SIGINT/SIGTERM 时关停。新增 HTTP 中间件、错误处理、`/health` 等只改 `runtime.go` 一处，不要再往 `app.go` 加分叉。服务端 5xx 的原因只写日志，响应只回通用状态文案。
 - 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录。
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
@@ -50,7 +50,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - Casbin 模型为 `g(r.sub, p.sub) && anchoredMatch(r.obj, p.obj) && anchoredMatch(r.act, p.act)`：整串锚定匹配（`^(?:pattern)$`），非法正则不匹配而非 panic；Admin 种子为 `admin, .*, .*`。权限展开里的路径参数写 `[^/]+`（单段），不得再写 `.*`；旧库的 `/x/.*` 策略在迁移时自动改写。免权限/免令牌路由在 `middleware/routes.go` 用精确 `METHOD /path` 维护，禁止 `HasSuffix`/`Contains` 式匹配，不擅自扩大放行范围。Fiber 已开 `CaseSensitive`+`StrictRouting`。
 - 角色权限只能通过 `PUT /roles/:slug/permissions` 提交 `{keys}` 保存；不接受原始策略，拒绝系统角色、不存在的角色和未知 key。
 - 审计异步写入须保持上下文隔离，避免复用请求 ctx。
-- 手写 SQL 须三库（SQLite/MySQL/PostgreSQL）通用：保留字列（`key`、`group`）用 `clause.Column`/`clause.Eq` 让 GORM 引用，不手写反引号或裸列名；不用 `||` 拼接做条件，在 Go 里比较；文本包含筛选用 `handlers.containsFold`（大小写不敏感且转义 `%`/`_`）。`app/dialect_test.go` 在三库跑这些路径，`NX_TEST_MYSQL_DSN`（go-sql-driver 形式）与 `NX_TEST_DATABASE_DSN` 启用后两者。
+- 手写 SQL 须三库（SQLite/MySQL/PostgreSQL）通用：保留字列（`key`、`group`）用 `clause.Column`/`clause.Eq` 让 GORM 引用，不手写反引号或裸列名；不用 `||` 拼接做条件，在 Go 里比较；文本包含筛选底座内用 `dbutil.ContainsFold`（大小写不敏感且转义 `%`/`_`）。`app/dialect_test.go` 在三库跑这些路径，`NX_TEST_MYSQL_DSN`（go-sql-driver 形式）与 `NX_TEST_DATABASE_DSN` 启用后两者。二开项目同样适用：文本包含筛选用公开的 `app.ContainsFold(q, column, term)`，勿直接写 `LIKE`；`column` 须为代码里的标识符，不得来自请求。
 - MFA 使用 TOTP：登录返回 `mfa_required` 后以六位码或恢复码换取正式 JWT；用户菜单提供设置，管理员用户管理入口可清空 MFA。
 - 上传：扩展名走白名单（`upload.allow_types`，默认仅无害格式；html/svg/js 等主动内容永远拒绝），按文件内容嗅探 MIME 且不信任客户端 `Content-Type`，图片/PDF 扩展名与内容必须一致；`/uploads` 响应带 `nosniff`、sandbox CSP，非图片/音视频/PDF 强制 `attachment`。
 - 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。

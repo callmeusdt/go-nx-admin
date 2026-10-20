@@ -82,6 +82,7 @@ func main() {
 		log.Fatalf("embedded dist not found, run 'make build-frontend' first: %v", err)
 	}
 
+	// app.Run 遇启动错误会终止进程；需要自行处理错误时改用 app.RunE。
 	app.Run(app.Options{
 		EmbedFS: sub,
 		// 二开项目注入点：

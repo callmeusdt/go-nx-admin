@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -126,14 +127,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		}
 	}()
 	r.App = fiber.New(fiber.Config{DisableStartupMessage: true, CaseSensitive: true, StrictRouting: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			status := fiber.StatusInternalServerError
-			var fe *fiber.Error
-			if errors.As(err, &fe) {
-				status = fe.Code
-			}
-			return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
-		}})
+		ErrorHandler: errorHandler})
 	config.AppConfig = &opts.Config
 	if opts.Cache != nil {
 		r.previousCache = cache.Set(opts.Cache)
@@ -166,13 +160,13 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	handlers.ExtraDashboardStats = opts.Extensions.DashboardStats
 	r.App.Use(fiberRecover.New())
-	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "${status} ${method} ${path}\n"}))
+	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "[${time}] ${status} - ${latency} ${method} ${path}\n"}))
 	r.App.Get("/health", func(c *fiber.Ctx) error {
 		db, err := opts.DB.DB()
 		if err != nil || db.PingContext(c.UserContext()) != nil {
-			return c.Status(503).JSON(fiber.Map{"status": "unavailable"})
+			return c.Status(503).JSON(fiber.Map{"status": "unavailable", "db": "disconnected"})
 		}
-		return c.JSON(fiber.Map{"status": "ok"})
+		return c.JSON(fiber.Map{"status": "ok", "db": "connected"})
 	})
 	routes.RegisterWithOptions(r.App, opts.DB, enforcer, opts.Extensions.ExtraRoutes, opts.DisableMedia)
 	if opts.PublicUploads {
@@ -266,4 +260,19 @@ func MigrateSchema(db *gorm.DB, extraModels ...interface{}) error {
 		return err
 	}
 	return middleware.UpgradeWildcardPolicies(db)
+}
+
+// errorHandler answers every failure with a generic status message. The cause
+// of a 5xx may contain SQL, file paths or driver text, so it is logged and
+// never returned.
+func errorHandler(c *fiber.Ctx, err error) error {
+	status := fiber.StatusInternalServerError
+	var fe *fiber.Error
+	if errors.As(err, &fe) {
+		status = fe.Code
+	}
+	if status >= 500 {
+		log.Printf("%s %s: %v", c.Method(), c.Path(), err)
+	}
+	return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
 }

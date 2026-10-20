@@ -147,3 +147,41 @@ func testSQLDialect(t *testing.T, db *gorm.DB) {
 		}
 	}
 }
+
+// The helper exported to downstream projects must behave identically on every
+// database, against a table the base knows nothing about.
+type dialectNote struct {
+	ID    uint `gorm:"primaryKey"`
+	Title string
+}
+
+func TestContainsFoldIsPortableForDownstreamModels(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			db := bootstrapTarget(t, dialect)
+			if err := db.AutoMigrate(&dialectNote{}); err != nil {
+				t.Fatal(err)
+			}
+			for _, title := range []string{"Quarterly Report", "100% done", "a_b", "axb", "O'Brien"} {
+				db.Create(&dialectNote{Title: title})
+			}
+			count := func(term string) int {
+				var n int64
+				if err := ContainsFold(db.Model(&dialectNote{}), "title", term).Count(&n).Error; err != nil {
+					t.Fatalf("%q: %v", term, err)
+				}
+				return int(n)
+			}
+			for term, want := range map[string]int{
+				"REPORT": 1, "report": 1, "quart": 1,
+				"%":   1, // only the row that really contains a percent sign
+				"_":   1, // "a_b" but not "axb"
+				"a_b": 1, "o'brien": 1, "!": 0, "": 5,
+			} {
+				if got := count(term); got != want {
+					t.Errorf("ContainsFold(%q) matched %d rows, want %d", term, got, want)
+				}
+			}
+		})
+	}
+}
