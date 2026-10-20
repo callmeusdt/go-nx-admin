@@ -57,8 +57,16 @@ function getDict(locale: string): Record<string, string> {
   return builtinMessages[locale] ?? builtinMessages['en-US']
 }
 
+let extensionMessages: I18nOptions['messages']
+
+/** Configure non-React consumers (auth/data providers) with the same dictionary
+ * as createApp's I18nProvider. Calling createApp again replaces the old options. */
+export function configureI18n(options?: I18nOptions): void {
+  extensionMessages = options?.messages
+}
+
 export function builtinMessage(locale: string, key: string): string {
-  return getDict(locale)[key] ?? key
+  return extensionMessages?.[locale]?.[key] ?? getDict(locale)[key] ?? key
 }
 
 export const I18nProvider: React.FC<{ children: React.ReactNode; options?: I18nOptions }> = ({ children, options }) => {

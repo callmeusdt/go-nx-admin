@@ -10,7 +10,7 @@ import { authProvider } from './providers/auth-provider'
 import { dataProvider } from './providers/data-provider'
 import { TabsProvider } from './contexts/tabs-context'
 import { LockScreenProvider } from './contexts/lock-screen-context'
-import { I18nProvider, useI18n } from './contexts/i18n-context'
+import { I18nProvider, useI18n, configureI18n } from './contexts/i18n-context'
 import type { I18nOptions } from './contexts/i18n-context'
 import { Layout, RouteLabelsContext } from './components/layout'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -119,6 +119,7 @@ export interface CreateAppOptions {
 
 export function createApp(opts?: CreateAppOptions): React.FC {
   configureSession(opts?.sessionMode)
+  configureI18n(opts?.i18n)
   return function App() {
     const resources = [...BUILTIN_RESOURCES.filter(item => !opts?.disabledResources?.includes(item.name)), ...(opts?.extraResources ?? [])]
     return (
