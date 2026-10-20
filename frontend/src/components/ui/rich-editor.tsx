@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -11,6 +11,9 @@ interface RichEditorProps {
   onChange: (html: string) => void
   placeholder?: string
   readOnly?: boolean
+  id?: string
+  'aria-label'?: string
+  'aria-describedby'?: string
 }
 
 const MenuButton: React.FC<{ onClick: () => void; active?: boolean; title: string; children: React.ReactNode }> = ({ onClick, active, title, children }) => (
@@ -20,14 +23,33 @@ const MenuButton: React.FC<{ onClick: () => void; active?: boolean; title: strin
   </button>
 )
 
-export const RichEditor: React.FC<RichEditorProps> = ({ value, onChange, placeholder, readOnly }) => {
+export const RichEditor: React.FC<RichEditorProps> = ({ value, onChange, placeholder, readOnly, id, 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }) => {
   const { t } = useI18n()
   const editor = useEditor({
     extensions: [StarterKit, Link, ImageExt],
     content: value,
+    editable: !readOnly,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
-    editorProps: { attributes: { class: 'prose prose-sm max-w-none focus:outline-none min-h-[150px] px-3 py-2' } },
-  })!
+    editorProps: { attributes: {
+      class: 'prose prose-sm max-w-none focus:outline-none min-h-[150px] px-3 py-2',
+      role: 'textbox', 'aria-multiline': 'true', 'aria-readonly': String(Boolean(readOnly)),
+      ...(id ? { id } : {}),
+      ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
+      ...(ariaDescribedBy ? { 'aria-describedby': ariaDescribedBy } : {}),
+      ...(placeholder ? { 'aria-placeholder': placeholder } : {}),
+    } },
+  })
+
+  useEffect(() => {
+    if (editor && editor.getHTML() !== value) {
+      editor.commands.setContent(value, { emitUpdate: false })
+    }
+  }, [editor, value])
+
+  useEffect(() => {
+    if (!editor) return
+    editor.setEditable(!readOnly, false)
+  }, [editor, readOnly])
 
   if (!editor) return null
 
