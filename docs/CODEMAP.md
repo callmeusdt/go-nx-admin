@@ -41,7 +41,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 ### `backend/internal/handlers/`
 | 文件 | 内容 |
 |---|---|
-| `auth.go` | 登录(密码→MFA 临时令牌→正式令牌)、`Me`、MFA、登出、IP 白名单检查 |
+| `auth.go` | 登录(先验密码再判状态,统一 401 并计限流)、`Me`、MFA(按用户限次、恢复码事务消费)、登出、IP 白名单检查(单 IP/CIDR) |
 | `refresh.go` | `POST /auth/refresh`:不透明 refresh token 原地轮换;10s 宽限(多标签竞态),宽限外重放则吊销会话 |
 | `crud.go` 的 `UpdateUser` | 用户名创建后不可变:更新接口忽略请求里的 `username`,前端编辑框为 `readOnly` |
 | `password.go` | `POST /auth/password`:旧密码(+MFA 开启时 TOTP)、`checkPasswordPolicy`(8–32 字节且不同于旧密码)、登录限流、**不踢会话**、成功后清 `must_change_password` |

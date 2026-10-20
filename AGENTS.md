@@ -5,7 +5,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 入口与扩展边界
 
 - 二开后端只能 import 公开的 `go-nx-admin/app`；需跨 module 使用的包不得放 `backend/internal/`。
-- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型，`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。`app.Run` 遇启动错误即 `log.Fatal`；`app.RunE(opts)` 返回 error、不终止进程，二者共用同一个 HTTP 栈：`RunE` 做配置、建目录、迁移、种子、策略后，委托 `NewRuntime`（`PublicUploads:true`）并在 SIGINT/SIGTERM 时关停。新增 HTTP 中间件、错误处理、`/health` 等只改 `runtime.go` 一处，不要再往 `app.go` 加分叉。服务端 5xx 的原因只写日志，响应只回通用状态文案：handler 里数据库/库错误一律经 `handlers.dbError`/`internalError`（唯一键冲突回 409 `already exists`，外键回 409，其余 500 `internal error`），不得再写 `c.Status(..).JSON(fiber.Map{"message": err.Error()})`；只有 `checkPasswordPolicy`、批量 id 校验这类自己构造的业务文案才可回显。`app.OpenDatabase` 开启 `TranslateError`；调用方自带 `*gorm.DB` 时 `dbError` 也会按驱动错误码兜底识别。
+- `backend/app/` 的 `app.Run(app.Options)` 是启动与扩展入口：`EmbedFS` 嵌入前端，`ExtraModels` 注册迁移模型（在底座表之后迁移，可外键引用 `admin_users` 等），`ExtraRoutes` 注入受 JWT + Casbin 保护的 `/api/v1` 路由，`AfterMigrate` 在底座 seed 后注入二开种子。`app.Run` 遇启动错误即 `log.Fatal`；`app.RunE(opts)` 返回 error、不终止进程，二者共用同一个 HTTP 栈：`RunE` 做配置、建目录、迁移、种子、策略后，委托 `NewRuntime`（`PublicUploads:true`）并在 SIGINT/SIGTERM 时关停。新增 HTTP 中间件、错误处理、`/health` 等只改 `runtime.go` 一处，不要再往 `app.go` 加分叉。服务端 5xx 的原因只写日志，响应只回通用状态文案：handler 里数据库/库错误一律经 `handlers.dbError`/`internalError`（唯一键冲突回 409 `already exists`，外键回 409，其余 500 `internal error`），不得再写 `c.Status(..).JSON(fiber.Map{"message": err.Error()})`；只有 `checkPasswordPolicy`、批量 id 校验这类自己构造的业务文案才可回显。`app.OpenDatabase` 开启 `TranslateError`；调用方自带 `*gorm.DB` 时 `dbError` 也会按驱动错误码兜底识别。
 - 需要显式生命周期的二开使用`app.NewRuntime(app.RuntimeOptions)`：传入公开`app.Config`与调用方拥有的GORM连接，`Listen/Close`不接管信号，构造时不迁移/seed/发现API/创建日志目录。`app.MigrateSchema`单独执行且不创建默认用户。`DisableMedia`禁内置媒体路由，`PublicUploads`必须显式开启才静态公开上传目录。
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
@@ -36,7 +36,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - key 使用 `资源:操作`，由 `ExpandPermission()` 或二开 `ExtraPermissionExpand` 展开为路径和方法的 Casbin 策略。新增权限须同时维护定义和展开；删除路由时同步移除引用它的权限。
 - `backend/internal/handlers/crud.go` 提供角色权限读取/保存；前端 `frontend/src/pages/roles/index.tsx` 通过 `GET /api/v1/roles/:slug/permissions` 拉取分组定义，通过 PUT 同路径提交 `{keys: [...]}`，后端展开策略。
 - 底座新增定义不需要另改数据库 seed、前端组件或中间件；二开只使用公开注入点，不改底座 `permissions.go`。
-- `AutoDiscoverAPIs()` 在路由注册后同步 API 登记表；登记/自动发现不替代权限定义与展开，也不代表新增路由已获得角色授权。
+- `AutoDiscoverAPIs()` 在路由注册后同步 API 登记表（跳过 HEAD/OPTIONS；仅删除 `source=auto` 且路由已不存在的行，UI 手建的记录不动）；登记/自动发现不替代权限定义与展开，也不代表新增路由已获得角色授权。
 - 菜单授权只控制侧栏可见性，不能替代接口鉴权。权限弹窗按组展示 checkbox，组全选与下级联动。
 
 ## 认证与安全边界
@@ -48,12 +48,13 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 
 - JWT 有效期 24h；`JWTAuth` 校验 token 对应的 `admin_online_users` 会话，MFA 验证路径不做在线会话检查。修改认证前先核对 middleware 和路由例外，不以菜单可见性代替认证。
 - Casbin 模型为 `g(r.sub, p.sub) && anchoredMatch(r.obj, p.obj) && anchoredMatch(r.act, p.act)`：整串锚定匹配（`^(?:pattern)$`），非法正则不匹配而非 panic；Admin 种子为 `admin, .*, .*`。权限展开里的路径参数写 `[^/]+`（单段），不得再写 `.*`；旧库的 `/x/.*` 策略在迁移时自动改写。免权限/免令牌路由在 `middleware/routes.go` 用精确 `METHOD /path` 维护，禁止 `HasSuffix`/`Contains` 式匹配，不擅自扩大放行范围。Fiber 已开 `CaseSensitive`+`StrictRouting`。
+- 登录先校验密码再判账号状态：未知用户、错误密码、被禁用账号返回同一 401，且都计入限流（无枚举）。Bearer 模式 MFA 验证按用户计失败次数并锁定；恢复码在事务内消费。删除角色须无用户使用（409），并同步清 `role_menus` 与 Casbin 策略；角色 slug 创建后不可改。菜单父级不得成环，删除菜单清其 `role_menus`。`ensureSystemMenus` 只在缺失时创建，不覆盖运维改动。
 - 角色权限只能通过 `PUT /roles/:slug/permissions` 提交 `{keys}` 保存；不接受原始策略，拒绝系统角色、不存在的角色和未知 key。
 - 审计异步写入须保持上下文隔离，避免复用请求 ctx。
 - 手写 SQL 须三库（SQLite/MySQL/PostgreSQL）通用：保留字列（`key`、`group`）用 `clause.Column`/`clause.Eq` 让 GORM 引用，不手写反引号或裸列名；不用 `||` 拼接做条件，在 Go 里比较；文本包含筛选底座内用 `dbutil.ContainsFold`（大小写不敏感且转义 `%`/`_`）。`app/dialect_test.go` 在三库跑这些路径，`NX_TEST_MYSQL_DSN`（go-sql-driver 形式）与 `NX_TEST_DATABASE_DSN` 启用后两者。二开项目同样适用：文本包含筛选用公开的 `app.ContainsFold(q, column, term)`，勿直接写 `LIKE`；`column` 须为代码里的标识符，不得来自请求。
 - MFA 使用 TOTP：登录返回 `mfa_required` 后以六位码或恢复码换取正式 JWT；用户菜单提供设置，管理员用户管理入口可清空 MFA。
 - 上传：扩展名走白名单（`upload.allow_types`，默认仅无害格式；html/svg/js 等主动内容永远拒绝），按文件内容嗅探 MIME 且不信任客户端 `Content-Type`，图片/PDF 扩展名与内容必须一致；`/uploads` 响应带 `nosniff`、sandbox CSP，非图片/音视频/PDF 强制 `attachment`。
-- 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。
+- 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行；规则可为单个 IP 或 CIDR，更新/删除按 URL 中的用户校验归属。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。
 - 现有 IP 解析涉及 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP`；geo 使用 ip-api，800ms 超时且失败留空。改动前核对实际代理信任边界，不把 header 或 geo 当作已验证身份。
 - 每次登录建立独立会话，注销只清当前 token；只能踢非当前会话。
 - 删除自身、删除系统角色、踢当前会话等危险动作必须前后端双重保护：按钮禁用，后端明确拒绝，不能只靠 UI。
@@ -72,7 +73,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 运行配置用根目录 `config.yaml`，模板为 `config.example.yaml`；环境变量覆盖对应配置。数据库支持 SQLite/MySQL/Postgres，默认 SQLite 路径 `data/nx.db` 相对工作目录。
 - `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`jwt.secret` 留空时首次启动自动生成 32 字节随机密钥写入 `jwt.secret_file`（默认 `data/jwt.secret`，0600），之后一直复用（它是运行状态，与 `data/nx.db` 同属需备份的数据；**运维必须备份 `data/jwt.secret`**，丢失会重新生成并使全部登录失效；不回写 `config.yaml`，因其常为只读/受审计）；显式值（配置或 `NX_JWT_SECRET`）优先，多实例须共用同一显式值，须≥32字节，已发布的默认值视为未设置。应用**不挂** Fiber 的 CORS 中间件、不输出任何 `Access-Control-*` 头（避免与 nginx 叠加出 `*, *` 这类重复值），CORS 一律由反向代理负责；`cors.origins` 仅为兼容旧配置保留，配置了会在启动日志警告“已忽略”。`Run` 启动先创建 `data`、`logs`、上传目录、自定义 SQLite 路径与密钥文件的父目录（`app.RequiredDirs`，`reset-password` 同样先建目录），全新部署无需预建目录。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用；`NewRuntime` 不写文件，要同样的“生成一次”行为的二开项目调用 `app.EnsureJWTSecret(path)`。`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
 - 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `127.0.0.1:19500`（本机验收可设 `NX_SERVER_HOST=172.18.0.1`）；健康入口 `/health`。
-- Vite 默认 `172.18.0.1:5173`，`VITE_HOST` 覆盖 host，`/api` 代理到后端。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
+- Vite 默认 `127.0.0.1:5173`，`VITE_HOST` 覆盖 host，`VITE_API_TARGET` 覆盖 `/api` 代理目标（默认 `http://127.0.0.1:19500`）。`backend/cmd/frontend/dist/.gitkeep` 与 `frontend/dist/.gitkeep` 入库，保证新克隆不先构建前端也能 `go build`；`make build-frontend` 用 `npm ci`，`Makefile` 不再执行 `go mod tidy`。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
 - 常用入口：`make build-frontend` 构建并复制 embed 资源，`make dev-frontend` 热更新，`make build` 完整构建，`./nx-admin serve` 启动。密码重置命令会写数据，仅在授权内使用。
 - 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `NX_SERVER_HOST=172.18.0.1 go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，初始 admin 密码见启动日志）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
 

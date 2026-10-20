@@ -234,7 +234,7 @@ export const RolesPage: React.FC = () => {
               <Input id={id} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('roles.name_hint')} />
             )}</FormField>
             <FormField label={t('roles.slug')} hint={t('roles.slug_help')}>{id => (
-              <Input id={id} value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={t('roles.slug_hint')} />
+              <Input id={id} value={form.slug} disabled={dialog.mode === 'edit'} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={t('roles.slug_hint')} />
             )}</FormField>
             {error && <Alert>{error}</Alert>}
             <div className="flex flex-wrap justify-end gap-2 pt-2">

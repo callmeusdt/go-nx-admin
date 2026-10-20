@@ -2,6 +2,7 @@ package models
 
 import (
 	"crypto/rand"
+	"fmt"
 	"log"
 	"math/big"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
 type User struct {
@@ -85,15 +87,21 @@ type AuditLog struct {
 func (AuditLog) TableName() string { return "admin_audit_logs" }
 
 type Api struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Group       string    `gorm:"size:64;index" json:"group"`
-	Name        string    `gorm:"size:64;not null" json:"name"`
-	Path        string    `gorm:"size:255;not null" json:"path"`
-	Method      string    `gorm:"size:16;not null" json:"method"`
-	Description string    `gorm:"size:255" json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Group       string `gorm:"size:64;index" json:"group"`
+	Name        string `gorm:"size:64;not null" json:"name"`
+	Path        string `gorm:"size:255;not null" json:"path"`
+	Method      string `gorm:"size:16;not null" json:"method"`
+	Description string `gorm:"size:255" json:"description"`
+	// Source is ApiSourceAuto for rows created by route discovery. Only those
+	// are removed when their route disappears; hand-made rows are never touched.
+	Source    string    `gorm:"size:16;not null;default:''" json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// ApiSourceAuto marks an Api row owned by AutoDiscoverAPIs.
+const ApiSourceAuto = "auto"
 
 func (Api) TableName() string { return "admin_apis" }
 
@@ -142,85 +150,143 @@ type UserIPWhitelist struct {
 
 func (UserIPWhitelist) TableName() string { return "admin_user_ip_whitelists" }
 
+// dropLegacyOnlineUserIndex removes the old unique index on user_id (one session
+// per user). Current databases have a plain index of the same name, which must
+// stay, so only a unique one is dropped. A fresh database has none.
+func dropLegacyOnlineUserIndex(db *gorm.DB) error {
+	const name = "idx_admin_online_users_user_id"
+	// The SQLite driver logs its PRAGMA while listing indexes; keep startup quiet.
+	quiet := db.Session(&gorm.Session{Logger: logger.Discard})
+	if !quiet.Migrator().HasTable(&OnlineUser{}) {
+		return nil
+	}
+	indexes, err := quiet.Migrator().GetIndexes(&OnlineUser{})
+	if err != nil {
+		return fmt.Errorf("inspect indexes: %w", err)
+	}
+	for _, idx := range indexes {
+		if idx.Name() != name {
+			continue
+		}
+		if unique, ok := idx.Unique(); ok && unique {
+			if err := db.Migrator().DropIndex(&OnlineUser{}, name); err != nil {
+				return fmt.Errorf("drop legacy index: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// AutoMigrate creates the base tables first, then the caller's extra models, so
+// an extra model may reference a base table (for example admin_users) even on a
+// brand-new database.
 func AutoMigrate(db *gorm.DB, extraModels ...interface{}) error {
+	if err := dropLegacyOnlineUserIndex(db); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&User{}, &Role{}, &Menu{}, &RoleMenu{}, &Api{}, &LoginLog{}, &OnlineUser{}, &AuditLog{}, &UserIPWhitelist{}, &Media{}, &SystemConfig{}); err != nil {
+		return err
+	}
 	for _, m := range extraModels {
 		if err := db.AutoMigrate(m); err != nil {
 			return err
 		}
 	}
-	db.Migrator().DropIndex(&OnlineUser{}, "idx_admin_online_users_user_id")
-	return db.AutoMigrate(&User{}, &Role{}, &Menu{}, &RoleMenu{}, &Api{}, &LoginLog{}, &OnlineUser{}, &AuditLog{}, &UserIPWhitelist{}, &Media{}, &SystemConfig{})
+	return nil
 }
 
+// Seed creates the first administrator on an empty database and, on every run,
+// makes sure the system menus, API rows and admin grants exist.
 func Seed(db *gorm.DB) error {
-	var count int64
-	db.Model(&Role{}).Count(&count)
-	if count > 0 {
-		migrateBackendManageMenu(db)
-		ensureSystemMenus(db)
-		ensureApiSeeds(db)
-		ensureAdminRoleMenus(db)
-		return nil
-	}
-
-	adminRole := Role{Name: "超级管理员", Slug: "admin", IsSystem: true}
-	if err := db.Create(&adminRole).Error; err != nil {
-		return err
-	}
-
-	// Every deployment gets its own first password, shown once in the log, and
-	// the account must replace it at first sign-in. A published default would
-	// be a working credential on every fresh install.
-	initialPassword, err := randomPassword()
+	initialPassword, err := seedFirstRun(db)
 	if err != nil {
 		return err
 	}
-	hashed, err := bcrypt.GenerateFromPassword([]byte(initialPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	adminUser := User{
-		Username:           "admin",
-		Password:           string(hashed),
-		Status:             1,
-		RoleID:             adminRole.ID,
-		MustChangePassword: true,
-	}
-	if err := db.Create(&adminUser).Error; err != nil {
-		return err
-	}
-
-	rootMenus := []Menu{
-		{Name: "仪表盘", Path: "/dashboard", Icon: "LayoutDashboard", Permission: "dashboard:view", Sort: 1},
-		{Name: "后台管理", Icon: "LayoutPanelLeft", Permission: "backend:manage", Sort: 99},
-	}
-	for i := range rootMenus {
-		if err := db.Create(&rootMenus[i]).Error; err != nil {
-			return err
-		}
-	}
-
-	children := []Menu{
-		{Name: "用户管理", Path: "/users", Icon: "Users", Permission: "users:list", ParentID: &rootMenus[1].ID, Sort: 1},
-		{Name: "角色管理", Path: "/roles", Icon: "Shield", Permission: "roles:list", ParentID: &rootMenus[1].ID, Sort: 2},
-		{Name: "菜单管理", Path: "/menus", Icon: "Menu", Permission: "menus:list", ParentID: &rootMenus[1].ID, Sort: 3},
-		{Name: "API管理", Path: "/apis", Icon: "Route", Permission: "apis:list", ParentID: &rootMenus[1].ID, Sort: 4},
-		{Name: "登录日志", Path: "/login-logs", Icon: "LogIn", Permission: "login-logs:list", ParentID: &rootMenus[1].ID, Sort: 5},
-		{Name: "操作日志", Path: "/audit-logs", Icon: "FileText", Permission: "audit-logs:list", ParentID: &rootMenus[1].ID, Sort: 6},
-	}
-	for i := range children {
-		if err := db.Create(&children[i]).Error; err != nil {
-			return err
-		}
-	}
-
 	migrateBackendManageMenu(db)
 	ensureSystemMenus(db)
 	ensureApiSeeds(db)
 	ensureAdminRoleMenus(db)
-
-	log.Printf("seed data created: initial administrator admin / %s (shown once; it must be changed at first sign-in)", initialPassword)
+	if initialPassword != "" {
+		log.Printf("seed data created: initial administrator admin / %s (shown once; it must be changed at first sign-in)", initialPassword)
+	}
 	return nil
+}
+
+// seedFirstRun creates the admin role, account and root menus in one
+// transaction, so a crash can not leave a role without its account (which the
+// next start would then treat as "already seeded"). If another instance seeds
+// at the same moment the unique role slug makes this one back off. It returns
+// the generated password, or "" when nothing was created.
+func seedFirstRun(db *gorm.DB) (string, error) {
+	var password string
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&Role{}).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return nil
+		}
+		adminRole := Role{Name: "超级管理员", Slug: "admin", IsSystem: true}
+		if err := tx.Create(&adminRole).Error; err != nil {
+			return err
+		}
+		// Every deployment gets its own first password, shown once in the log,
+		// and the account must replace it at first sign-in. A published default
+		// would be a working credential on every fresh install.
+		initial, err := randomPassword()
+		if err != nil {
+			return err
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(initial), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		adminUser := User{
+			Username:           "admin",
+			Password:           string(hashed),
+			Status:             1,
+			RoleID:             adminRole.ID,
+			MustChangePassword: true,
+		}
+		if err := tx.Create(&adminUser).Error; err != nil {
+			return err
+		}
+
+		rootMenus := []Menu{
+			{Name: "仪表盘", Path: "/dashboard", Icon: "LayoutDashboard", Permission: "dashboard:view", Sort: 1},
+			{Name: "后台管理", Icon: "LayoutPanelLeft", Permission: "backend:manage", Sort: 99},
+		}
+		for i := range rootMenus {
+			if err := tx.Create(&rootMenus[i]).Error; err != nil {
+				return err
+			}
+		}
+		children := []Menu{
+			{Name: "用户管理", Path: "/users", Icon: "Users", Permission: "users:list", ParentID: &rootMenus[1].ID, Sort: 1},
+			{Name: "角色管理", Path: "/roles", Icon: "Shield", Permission: "roles:list", ParentID: &rootMenus[1].ID, Sort: 2},
+			{Name: "菜单管理", Path: "/menus", Icon: "Menu", Permission: "menus:list", ParentID: &rootMenus[1].ID, Sort: 3},
+			{Name: "API管理", Path: "/apis", Icon: "Route", Permission: "apis:list", ParentID: &rootMenus[1].ID, Sort: 4},
+			{Name: "登录日志", Path: "/login-logs", Icon: "LogIn", Permission: "login-logs:list", ParentID: &rootMenus[1].ID, Sort: 5},
+			{Name: "操作日志", Path: "/audit-logs", Icon: "FileText", Permission: "audit-logs:list", ParentID: &rootMenus[1].ID, Sort: 6},
+		}
+		for i := range children {
+			if err := tx.Create(&children[i]).Error; err != nil {
+				return err
+			}
+		}
+		password = initial
+		return nil
+	})
+	if err != nil {
+		// Losing the race to a concurrent seeder is not a failure.
+		var roles int64
+		if db.Model(&Role{}).Count(&roles).Error == nil && roles > 0 {
+			return "", nil
+		}
+		return "", err
+	}
+	return password, nil
 }
 
 // randomPassword returns 20 characters (~119 bits) of unambiguous characters,
@@ -239,6 +305,23 @@ func randomPassword() (string, error) {
 	return string(buf), nil
 }
 
+// ensureMenu creates a system menu when no menu uses its path. An existing menu
+// is left exactly as the operator configured it: names, icons, order and parent
+// are theirs to change, and a restart must not undo that.
+func ensureMenu(db *gorm.DB, item Menu) {
+	var n int64
+	if err := db.Model(&Menu{}).Where("path = ?", item.Path).Count(&n).Error; err != nil {
+		log.Printf("seed menu %s: %v", item.Path, err)
+		return
+	}
+	if n > 0 {
+		return
+	}
+	if err := db.Create(&item).Error; err != nil {
+		log.Printf("seed menu %s: %v", item.Path, err)
+	}
+}
+
 func ensureSystemMenus(db *gorm.DB) {
 	var backend Menu
 	if err := db.Where("permission = ?", "backend:manage").First(&backend).Error; err != nil {
@@ -250,18 +333,7 @@ func ensureSystemMenus(db *gorm.DB) {
 		{Name: "操作日志", Path: "/audit-logs", Icon: "FileText", Permission: "audit-logs:list", ParentID: &backend.ID, Sort: 6},
 	}
 	for _, item := range items {
-		var menu Menu
-		if err := db.Where("path = ?", item.Path).First(&menu).Error; err == nil {
-			db.Model(&menu).Updates(map[string]interface{}{
-				"name":       item.Name,
-				"icon":       item.Icon,
-				"permission": item.Permission,
-				"parent_id":  backend.ID,
-				"sort":       item.Sort,
-			})
-			continue
-		}
-		db.Create(&item)
+		ensureMenu(db, item)
 	}
 	var auditMenus []Menu
 	db.Where("path = ?", "/audit-logs").Order("id asc").Find(&auditMenus)
@@ -291,15 +363,7 @@ func ensureSystemMenus(db *gorm.DB) {
 		{Name: "媒体管理", Path: "/media", Icon: "Image", Permission: "media:list", ParentID: &sysMenu.ID, Sort: 2},
 	}
 	for _, item := range sysItems {
-		var m Menu
-		if err := db.Where("path = ?", item.Path).First(&m).Error; err == nil {
-			db.Model(&m).Updates(map[string]interface{}{
-				"name": item.Name, "icon": item.Icon,
-				"permission": item.Permission, "parent_id": sysMenu.ID, "sort": item.Sort,
-			})
-			continue
-		}
-		db.Create(&item)
+		ensureMenu(db, item)
 	}
 
 	// 系统配置种子
@@ -337,7 +401,19 @@ func ensureApiSeeds(db *gorm.DB) {
 }
 
 func AutoDiscoverAPIs(app *fiber.App, db *gorm.DB) {
-	var knownPaths []string
+	var existing []Api
+	if err := db.Find(&existing).Error; err != nil {
+		log.Printf("api auto-discover: list registered endpoints: %v", err)
+		return
+	}
+	// Compare in Go: string concatenation differs per dialect (|| is OR in MySQL).
+	byKey := make(map[string]Api, len(existing))
+	for _, row := range existing {
+		byKey[row.Path+"|"+row.Method] = row
+	}
+
+	known := map[string]bool{}
+	var created []Api
 	for _, routes := range app.Stack() {
 		for _, route := range routes {
 			path := route.Path
@@ -345,46 +421,44 @@ func AutoDiscoverAPIs(app *fiber.App, db *gorm.DB) {
 			if !strings.HasPrefix(path, "/api/") {
 				continue
 			}
+			// HEAD and OPTIONS are Fiber's automatic companions of other routes,
+			// not endpoints anyone grants or manages.
+			if method == fiber.MethodHead || method == fiber.MethodOptions {
+				continue
+			}
 			if path == "/api/v1/auth/login" || path == "/api/v1/auth/verify-password" || path == "/api/v1/auth/captcha" {
 				continue
 			}
 			key := path + "|" + method
-			knownPaths = append(knownPaths, key)
+			if known[key] {
+				continue
+			}
+			known[key] = true
 			group := "api"
 			parts := strings.Split(strings.Trim(path, "/"), "/")
 			if len(parts) >= 3 {
 				group = parts[2]
 			}
-			var existing Api
-			if err := db.Where("path = ? AND method = ?", path, method).First(&existing).Error; err == nil {
-				if existing.Group == "" {
-					db.Model(&existing).Update("group", group)
+			if row, ok := byKey[key]; ok {
+				if row.Group == "" {
+					db.Model(&Api{}).Where("id = ?", row.ID).Update("group", group)
 				}
 				continue
 			}
-			db.Create(&Api{
-				Group:  group,
-				Name:   method + " " + path,
-				Path:   path,
-				Method: method,
-			})
+			created = append(created, Api{Group: group, Name: method + " " + path, Path: path, Method: method, Source: ApiSourceAuto})
 		}
 	}
-	if len(knownPaths) == 0 {
+	if len(created) > 0 {
+		if err := db.CreateInBatches(&created, 100).Error; err != nil {
+			log.Printf("api auto-discover: register endpoints: %v", err)
+		}
+	}
+	if len(known) == 0 {
 		return
 	}
-	// Compare in Go: string concatenation differs per dialect (|| is OR in MySQL).
-	known := make(map[string]bool, len(knownPaths))
-	for _, k := range knownPaths {
-		known[k] = true
-	}
-	var registered []Api
-	if err := db.Select("id", "path", "method").Where("path LIKE ?", "/api/v1/%").Find(&registered).Error; err != nil {
-		log.Printf("api auto-discover: list registered endpoints: %v", err)
-	}
 	var stale []uint
-	for _, row := range registered {
-		if !known[row.Path+"|"+row.Method] {
+	for _, row := range existing {
+		if row.Source == ApiSourceAuto && strings.HasPrefix(row.Path, "/api/v1/") && !known[row.Path+"|"+row.Method] {
 			stale = append(stale, row.ID)
 		}
 	}
@@ -399,7 +473,7 @@ func AutoDiscoverAPIs(app *fiber.App, db *gorm.DB) {
 		}
 		stale = stale[n:]
 	}
-	log.Printf("api auto-discover: synced %d endpoints", len(knownPaths))
+	log.Printf("api auto-discover: synced %d endpoints", len(known))
 }
 
 func migrateBackendManageMenu(db *gorm.DB) {

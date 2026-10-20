@@ -46,11 +46,11 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Put("/users/:id/ip-whitelists/:wid", handlers.UpdateUserIPWhitelist(db))
 	api.Delete("/users/:id/ip-whitelists/:wid", handlers.DeleteUserIPWhitelist(db))
 
-	api.Delete("/roles", handlers.BatchDeleteRoles(db))
+	api.Delete("/roles", handlers.BatchDeleteRoles(db, enforcer))
 	api.Get("/roles", handlers.ListRoles(db))
 	api.Post("/roles", handlers.CreateRole(db))
 	api.Put("/roles/:id", handlers.UpdateRole(db))
-	api.Delete("/roles/:id", handlers.DeleteRole(db))
+	api.Delete("/roles/:id", handlers.DeleteRole(db, enforcer))
 	api.Get("/roles/:id/menus", handlers.RoleMenuIDs(db))
 	api.Put("/roles/:id/menus", handlers.SaveRoleMenus(db))
 	api.Get("/roles/:slug/policies", handlers.ListRolePolicies(enforcer))

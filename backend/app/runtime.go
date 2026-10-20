@@ -127,7 +127,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		}
 	}()
 	r.App = fiber.New(fiber.Config{DisableStartupMessage: true, CaseSensitive: true, StrictRouting: true,
-		ErrorHandler: errorHandler})
+		BodyLimit: bodyLimit(opts), ErrorHandler: errorHandler})
 	config.AppConfig = &opts.Config
 	if opts.Cache != nil {
 		r.previousCache = cache.Set(opts.Cache)
@@ -275,4 +275,19 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		log.Printf("%s %s: %v", c.Method(), c.Path(), err)
 	}
 	return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
+}
+
+// bodyLimit lets a request carry a full upload plus multipart framing. Fiber's
+// 4 MiB default would reject any upload the configuration allows beyond that
+// before the handler could apply its own, clearer limit.
+func bodyLimit(opts RuntimeOptions) int {
+	const floor, framing = 4 << 20, 1 << 20
+	if opts.DisableMedia || opts.Config.Upload.MaxSize <= 0 {
+		return floor
+	}
+	limit := opts.Config.Upload.MaxSize + framing
+	if limit < floor || limit > int64(^uint(0)>>1) {
+		return floor
+	}
+	return int(limit)
 }

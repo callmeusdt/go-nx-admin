@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net"
 	"os"
 	"strconv"
@@ -120,7 +121,9 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			Username string `json:"username"`
 			Password string `json:"password,omitempty"`
 			Status   *int   `json:"status"`
-			RoleID   uint   `json:"role_id"`
+			// nil leaves the role as it is; an update that omits it must not
+			// move the user to role 0.
+			RoleID *uint `json:"role_id"`
 			// nil leaves the flag as it is, so clients that do not know about
 			// it can not clear a pending forced change by accident.
 			MustChangePassword *bool `json:"must_change_password"`
@@ -129,7 +132,13 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
 		// The username is the account's identity and never changes after creation.
-		updates := map[string]interface{}{"role_id": req.RoleID}
+		updates := map[string]interface{}{}
+		if req.RoleID != nil {
+			if *req.RoleID == 0 {
+				return c.Status(400).JSON(fiber.Map{"message": "invalid role"})
+			}
+			updates["role_id"] = *req.RoleID
+		}
 		if req.Password != "" {
 			if err := checkPasswordPolicy(req.Password); err != nil {
 				return c.Status(400).JSON(fiber.Map{"message": err.Error()})
@@ -145,6 +154,9 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 		}
 		if req.Status != nil {
 			updates["status"] = *req.Status
+		}
+		if len(updates) == 0 {
+			return c.JSON(fiber.Map{"message": "ok"})
 		}
 		err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
@@ -168,7 +180,16 @@ func DeleteUser(db *gorm.DB) fiber.Handler {
 		if currentUserID, ok := c.Locals("user_id").(uint); ok && uint(id) == currentUserID {
 			return c.Status(400).JSON(fiber.Map{"message": "cannot delete current user"})
 		}
-		db.Delete(&models.User{}, id)
+		var exists int64
+		if err := db.Model(&models.User{}).Where("id = ?", id).Count(&exists).Error; err != nil {
+			return dbError(c, err)
+		}
+		if exists == 0 {
+			return c.Status(404).JSON(fiber.Map{"message": "not found"})
+		}
+		if err := deleteUserCascade(db, uint(id)); err != nil {
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }
@@ -210,16 +231,49 @@ func UpdateRole(db *gorm.DB) fiber.Handler {
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		if err := db.Model(&models.Role{}).Where("id = ?", id).Updates(map[string]interface{}{
-			"name": req.Name, "slug": req.Slug,
-		}).Error; err != nil {
+		var role models.Role
+		if err := db.First(&role, id).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"message": "role not found"})
+		}
+		// Casbin policies and issued tokens refer to the role by slug, so it is
+		// fixed at creation like a username.
+		if req.Slug != "" && req.Slug != role.Slug {
+			return c.Status(400).JSON(fiber.Map{"message": "role slug cannot be changed"})
+		}
+		if err := db.Model(&models.Role{}).Where("id = ?", id).Update("name", req.Name).Error; err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }
 
-func DeleteRole(db *gorm.DB) fiber.Handler {
+var errRoleInUse = errors.New("role is assigned to users")
+
+// deleteRole removes a role together with everything keyed by it. The Casbin
+// policies are keyed by slug, so leaving them behind would hand the old
+// permissions to any later role created with the same slug.
+func deleteRole(db *gorm.DB, e *casbin.Enforcer, role models.Role) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var inUse int64
+		if err := tx.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&inUse).Error; err != nil {
+			return err
+		}
+		if inUse > 0 {
+			return errRoleInUse
+		}
+		if err := tx.Where("role_id = ?", role.ID).Delete(&models.RoleMenu{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&role).Error
+	})
+	if err != nil {
+		return err
+	}
+	_, err = e.RemoveFilteredPolicy(0, role.Slug)
+	return err
+}
+
+func DeleteRole(db *gorm.DB, e *casbin.Enforcer) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		var role models.Role
@@ -229,7 +283,12 @@ func DeleteRole(db *gorm.DB) fiber.Handler {
 		if role.IsSystem {
 			return c.Status(400).JSON(fiber.Map{"message": "system role cannot be deleted"})
 		}
-		db.Delete(&role)
+		if err := deleteRole(db, e, role); err != nil {
+			if errors.Is(err, errRoleInUse) {
+				return c.Status(409).JSON(fiber.Map{"message": errRoleInUse.Error()})
+			}
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }
@@ -269,11 +328,49 @@ func buildMenuTree(all []models.Menu) []models.Menu {
 	return fillChildren(roots)
 }
 
+// checkMenuParent rejects a parent that does not exist or that would put the
+// menu under itself or one of its own descendants (a cycle never renders and
+// would send a recursive walk into an endless loop). selfID is 0 for a new menu.
+func checkMenuParent(db *gorm.DB, selfID uint, parentID *uint) (string, error) {
+	if parentID == nil {
+		return "", nil
+	}
+	if *parentID == 0 {
+		return "invalid parent", nil
+	}
+	var all []models.Menu
+	if err := db.Select("id", "parent_id").Find(&all).Error; err != nil {
+		return "", err
+	}
+	parentOf := make(map[uint]*uint, len(all))
+	for _, m := range all {
+		parentOf[m.ID] = m.ParentID
+	}
+	if _, ok := parentOf[*parentID]; !ok {
+		return "parent not found", nil
+	}
+	seen := map[uint]bool{}
+	for cur := parentID; cur != nil && !seen[*cur]; cur = parentOf[*cur] {
+		if selfID != 0 && *cur == selfID {
+			return "menu cannot be its own ancestor", nil
+		}
+		seen[*cur] = true
+	}
+	return "", nil
+}
+
 func CreateMenu(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var menu models.Menu
 		if err := c.BodyParser(&menu); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
+		}
+		menu.ID = 0
+		menu.Children = nil
+		if msg, err := checkMenuParent(db, 0, menu.ParentID); err != nil {
+			return dbError(c, err)
+		} else if msg != "" {
+			return c.Status(400).JSON(fiber.Map{"message": msg})
 		}
 		if err := db.Create(&menu).Error; err != nil {
 			return dbError(c, err)
@@ -289,6 +386,11 @@ func UpdateMenu(db *gorm.DB) fiber.Handler {
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
+		if msg, err := checkMenuParent(db, uint(id), req.ParentID); err != nil {
+			return dbError(c, err)
+		} else if msg != "" {
+			return c.Status(400).JSON(fiber.Map{"message": msg})
+		}
 		if err := db.Model(&models.Menu{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"name": req.Name, "path": req.Path, "icon": req.Icon,
 			"permission": req.Permission, "sort": req.Sort, "parent_id": req.ParentID,
@@ -299,31 +401,49 @@ func UpdateMenu(db *gorm.DB) fiber.Handler {
 	}
 }
 
+// menuSubtreeIDs returns id and all its descendants in one query. A visited set
+// keeps a corrupt (cyclic) tree from looping forever.
+func menuSubtreeIDs(db *gorm.DB, id uint) ([]uint, error) {
+	var all []models.Menu
+	if err := db.Select("id", "parent_id").Find(&all).Error; err != nil {
+		return nil, err
+	}
+	children := make(map[uint][]uint, len(all))
+	for _, m := range all {
+		if m.ParentID != nil {
+			children[*m.ParentID] = append(children[*m.ParentID], m.ID)
+		}
+	}
+	out := []uint{}
+	seen := map[uint]bool{}
+	for queue := []uint{id}; len(queue) > 0; {
+		cur := queue[0]
+		queue = queue[1:]
+		if seen[cur] {
+			continue
+		}
+		seen[cur] = true
+		out = append(out, cur)
+		queue = append(queue, children[cur]...)
+	}
+	return out, nil
+}
+
 func DeleteMenu(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
-		var collectIDs func(uint) ([]uint, error)
-		collectIDs = func(menuID uint) ([]uint, error) {
-			ids := []uint{menuID}
-			var children []models.Menu
-			if err := db.Where("parent_id = ?", menuID).Find(&children).Error; err != nil {
-				return nil, err
-			}
-			for _, child := range children {
-				childIDs, err := collectIDs(child.ID)
-				if err != nil {
-					return nil, err
-				}
-				ids = append(ids, childIDs...)
-			}
-			return ids, nil
-		}
-
-		ids, err := collectIDs(uint(id))
+		ids, err := menuSubtreeIDs(db, uint(id))
 		if err != nil {
 			return dbError(c, err)
 		}
-		if err := db.Delete(&models.Menu{}, ids).Error; err != nil {
+		// Role grants point at menu ids; leaving them behind would attach the
+		// old grant to whatever menu later reuses the id.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("menu_id IN ?", ids).Delete(&models.RoleMenu{}).Error; err != nil {
+				return err
+			}
+			return tx.Where("id IN ?", ids).Delete(&models.Menu{}).Error
+		}); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -596,11 +716,33 @@ func CheckLoginIPWhitelist(db *gorm.DB, userID uint, ip string) (bool, string) {
 		return false, "invalid client IP"
 	}
 	for _, rule := range rules {
-		if rule.IP == ip {
+		if ipRuleMatches(rule.IP, parsed) {
 			return true, ""
 		}
 	}
 	return false, "IP not allowed"
+}
+
+// ipRuleMatches reports whether a stored rule (a single address or a CIDR
+// range) covers ip. Addresses are compared as parsed values, so equivalent
+// IPv6 spellings match.
+func ipRuleMatches(rule string, ip net.IP) bool {
+	rule = strings.TrimSpace(rule)
+	if strings.Contains(rule, "/") {
+		_, network, err := net.ParseCIDR(rule)
+		return err == nil && network.Contains(ip)
+	}
+	allowed := net.ParseIP(rule)
+	return allowed != nil && allowed.Equal(ip)
+}
+
+// validIPRule accepts a single IP address or a CIDR range.
+func validIPRule(rule string) bool {
+	if strings.Contains(rule, "/") {
+		_, _, err := net.ParseCIDR(rule)
+		return err == nil
+	}
+	return net.ParseIP(rule) != nil
 }
 
 func ListUserIPWhitelists(db *gorm.DB) fiber.Handler {
@@ -617,16 +759,34 @@ func ListUserIPWhitelists(db *gorm.DB) fiber.Handler {
 func CreateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
-		var rule models.UserIPWhitelist
-		if err := c.BodyParser(&rule); err != nil {
+		var req struct {
+			IP      string `json:"ip"`
+			Remark  string `json:"remark"`
+			Enabled *bool  `json:"enabled"`
+		}
+		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		rule.ID = 0
-		rule.UserID = uint(id)
-		if rule.IP == "" {
+		req.IP = strings.TrimSpace(req.IP)
+		if req.IP == "" {
 			return c.Status(400).JSON(fiber.Map{"message": "ip required"})
 		}
-		if err := db.Create(&rule).Error; err != nil {
+		if !validIPRule(req.IP) {
+			return c.Status(400).JSON(fiber.Map{"message": "invalid ip or cidr"})
+		}
+		rule := models.UserIPWhitelist{UserID: uint(id), IP: req.IP, Remark: req.Remark}
+		enabled := req.Enabled == nil || *req.Enabled
+		// The column default is true and GORM substitutes it for a zero bool on
+		// insert, so an explicit "disabled" is written as a follow-up update.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&rule).Error; err != nil {
+				return err
+			}
+			if !enabled {
+				return tx.Model(&rule).Update("enabled", false).Error
+			}
+			return nil
+		}); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"data": rule})
@@ -635,15 +795,41 @@ func CreateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 
 func UpdateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		wid, _ := strconv.ParseUint(c.Params("wid"), 10, 64)
-		var req models.UserIPWhitelist
+		var req struct {
+			IP      *string `json:"ip"`
+			Remark  *string `json:"remark"`
+			Enabled *bool   `json:"enabled"`
+		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		if err := db.Model(&models.UserIPWhitelist{}).Where("id = ?", wid).Updates(map[string]interface{}{
-			"ip": req.IP, "remark": req.Remark, "enabled": req.Enabled,
-		}).Error; err != nil {
-			return dbError(c, err)
+		updates := map[string]interface{}{}
+		if req.IP != nil {
+			ip := strings.TrimSpace(*req.IP)
+			if !validIPRule(ip) {
+				return c.Status(400).JSON(fiber.Map{"message": "invalid ip or cidr"})
+			}
+			updates["ip"] = ip
+		}
+		if req.Remark != nil {
+			updates["remark"] = *req.Remark
+		}
+		if req.Enabled != nil {
+			updates["enabled"] = *req.Enabled
+		}
+		if len(updates) == 0 {
+			return c.JSON(fiber.Map{"message": "ok"})
+		}
+		// The rule must belong to the user in the URL, otherwise any rule id
+		// could be edited through any user's path.
+		res := db.Model(&models.UserIPWhitelist{}).Where("id = ? AND user_id = ?", wid, id).Updates(updates)
+		if res.Error != nil {
+			return dbError(c, res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return c.Status(404).JSON(fiber.Map{"message": "not found"})
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
@@ -651,8 +837,15 @@ func UpdateUserIPWhitelist(db *gorm.DB) fiber.Handler {
 
 func DeleteUserIPWhitelist(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		wid, _ := strconv.ParseUint(c.Params("wid"), 10, 64)
-		db.Delete(&models.UserIPWhitelist{}, wid)
+		res := db.Where("id = ? AND user_id = ?", wid, id).Delete(&models.UserIPWhitelist{})
+		if res.Error != nil {
+			return dbError(c, res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return c.Status(404).JSON(fiber.Map{"message": "not found"})
+		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }

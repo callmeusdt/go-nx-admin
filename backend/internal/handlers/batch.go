@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/casbin/casbin/v2"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 
@@ -187,7 +188,7 @@ func BatchUpdateUserStatus(db *gorm.DB) fiber.Handler {
 }
 
 // BatchDeleteRoles: DELETE /roles {ids}
-func BatchDeleteRoles(db *gorm.DB) fiber.Handler {
+func BatchDeleteRoles(db *gorm.DB, e *casbin.Enforcer) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ids, err := parseBatchIDs(c)
 		if err != nil {
@@ -211,12 +212,9 @@ func BatchDeleteRoles(db *gorm.DB) fiber.Handler {
 			case role.IsSystem:
 				res.fail(id, "system role cannot be deleted")
 			default:
-				var inUse int64
-				if err := db.Model(&models.User{}).Where("role_id = ?", id).Count(&inUse).Error; err != nil {
-					res.fail(id, "delete failed")
-				} else if inUse > 0 {
+				if err := deleteRole(db, e, role); errors.Is(err, errRoleInUse) {
 					res.fail(id, "role is assigned to users")
-				} else if err := db.Delete(&role).Error; err != nil {
+				} else if err != nil {
 					res.fail(id, "delete failed")
 				} else {
 					res.Deleted = append(res.Deleted, id)

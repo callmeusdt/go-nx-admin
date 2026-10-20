@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
@@ -22,7 +23,11 @@ import (
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// dummyPasswordHash is compared against when the username does not exist.
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("nx-admin-dummy-password"), bcrypt.DefaultCost)
 
 func Login(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -85,18 +90,23 @@ func Login(db *gorm.DB) fiber.Handler {
 
 	checkPassword:
 		var user models.User
-		if err := db.Where("username = ?", req.Username).Preload("Role").First(&user).Error; err != nil {
-			recordLoginLog(db, req.Username, c, "fail", "invalid credentials", start)
-			return c.Status(401).JSON(fiber.Map{"message": "invalid credentials"})
+		found := db.Where("username = ?", req.Username).Preload("Role").First(&user).Error == nil
+		// Always run one bcrypt comparison so an unknown user costs the same as a
+		// wrong password, and always count the failure against the rate limit.
+		hash := []byte(user.Password)
+		if !found {
+			hash = dummyPasswordHash
 		}
-		if user.Status != 1 {
-			recordLoginLog(db, req.Username, c, "fail", "account disabled", start)
-			return c.Status(403).JSON(fiber.Map{"message": "account disabled"})
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		passwordOK := bcrypt.CompareHashAndPassword(hash, []byte(req.Password)) == nil
+		if !found || !passwordOK || user.Status != 1 {
+			// A disabled account answers exactly like a wrong password, so the
+			// response never confirms that a username exists.
+			reason := "invalid credentials"
+			if found && passwordOK {
+				reason = "account disabled"
+			}
 			middleware.RecordFailedAttempt(ip)
-			recordLoginLog(db, req.Username, c, "fail", "invalid credentials", start)
+			recordLoginLog(db, req.Username, c, "fail", reason, start)
 			FlagFp(fp)
 			if config.AppConfig.Captcha.Enabled && req.CaptchaID == "" {
 				return sendCaptchaRequired(c)
@@ -319,33 +329,31 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "MFA not enabled"})
 		}
 
+		// A six-digit code is guessable by brute force, so failures are counted
+		// per user (not per IP) and the account is locked out for a while.
+		mfaKey := "mfa:" + strconv.FormatUint(uint64(user.ID), 10)
+		if allowed, remain := middleware.CheckRateLimit(mfaKey); !allowed {
+			return c.Status(429).JSON(fiber.Map{"message": fmt.Sprintf("验证尝试过于频繁，请%d分钟后再试", remain)})
+		}
+
 		verified := false
 		if req.RecoveryCode != "" {
-			hash := sha256.Sum256([]byte(req.RecoveryCode))
-			codeHex := hex.EncodeToString(hash[:])
-			for _, saved := range strings.Split(user.MFARecoveryCodes, ",") {
-				if saved == codeHex {
-					verified = true
-					hashedCodes := make([]string, 0)
-					for _, sc := range strings.Split(user.MFARecoveryCodes, ",") {
-						if sc != codeHex {
-							hashedCodes = append(hashedCodes, sc)
-						}
-					}
-					user.MFARecoveryCodes = strings.Join(hashedCodes, ",")
-					db.Save(&user)
-					break
-				}
+			ok, err := consumeRecoveryCode(db, user.ID, req.RecoveryCode)
+			if err != nil {
+				return dbError(c, err)
 			}
+			verified = ok
 		} else {
 			verified = totp.Validate(req.Code, user.MFASecret)
 		}
 
 		if !verified {
+			middleware.RecordFailedAttempt(mfaKey)
 			recordLoginLog(db, user.Username, c, "mfa_fail", "mfa verification failed", start)
 			return c.Status(401).JSON(fiber.Map{"message": "invalid mfa code"})
 		}
 
+		middleware.ClearRateLimit(mfaKey)
 		username := user.Username
 		if err := db.Preload("Role").First(&user, user.ID).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "reload user failed"})
@@ -366,6 +374,36 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 			},
 		})
 	}
+}
+
+// consumeRecoveryCode removes a matching recovery code under a row lock so two
+// concurrent requests cannot both spend the same code.
+func consumeRecoveryCode(db *gorm.DB, userID uint, code string) (bool, error) {
+	hash := sha256.Sum256([]byte(code))
+	codeHex := hex.EncodeToString(hash[:])
+	used := false
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, userID).Error; err != nil {
+			return err
+		}
+		kept := make([]string, 0)
+		for _, saved := range strings.Split(user.MFARecoveryCodes, ",") {
+			if saved == "" {
+				continue
+			}
+			if subtle.ConstantTimeCompare([]byte(saved), []byte(codeHex)) == 1 {
+				used = true
+			} else {
+				kept = append(kept, saved)
+			}
+		}
+		if !used {
+			return nil
+		}
+		return tx.Model(&user).Update("mfa_recovery_codes", strings.Join(kept, ",")).Error
+	})
+	return used && err == nil, err
 }
 
 func generateRecoveryCodes() []string {

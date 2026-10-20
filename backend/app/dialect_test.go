@@ -62,12 +62,19 @@ func testSQLDialect(t *testing.T, db *gorm.DB) {
 	api.Get("/api/v1/menus/limited", asRole(limitedRole.ID), handlers.MyMenus(db))
 
 	// A stale endpoint registered earlier must be pruned, live ones kept.
-	db.Create(&models.Api{Group: "old", Name: "gone", Path: "/api/v1/gone", Method: "GET"})
+	// An endpoint discovered earlier is pruned; one an operator added by hand
+	// is not, even though no route backs it.
+	db.Create(&models.Api{Group: "old", Name: "gone", Path: "/api/v1/gone", Method: "GET", Source: models.ApiSourceAuto})
+	db.Create(&models.Api{Group: "old", Name: "manual", Path: "/api/v1/manual", Method: "GET"})
 	models.AutoDiscoverAPIs(api, db)
-	var gone int64
+	var gone, manual int64
 	db.Model(&models.Api{}).Where("path = ?", "/api/v1/gone").Count(&gone)
+	db.Model(&models.Api{}).Where("path = ?", "/api/v1/manual").Count(&manual)
 	if gone != 0 {
 		t.Fatal("stale API row was not removed by auto-discovery")
+	}
+	if manual != 1 {
+		t.Fatal("a hand-made API row was removed by auto-discovery")
 	}
 	var kept int64
 	db.Model(&models.Api{}).Where("path = ? AND method = ?", "/api/v1/apis", "GET").Count(&kept)
