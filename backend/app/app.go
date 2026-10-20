@@ -18,9 +18,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	fiberLog "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"go-nx-admin/internal/cache"
@@ -115,23 +112,12 @@ func Run(opts Options) {
 	}
 	storage.Set(files)
 
-	var db *gorm.DB
-	switch cfg.Database.Driver {
-	case "mysql":
-		db, err = gorm.Open(mysql.Open(cfg.Database.DSN), &gorm.Config{})
-	case "postgres":
-		db, err = gorm.Open(postgres.Open(cfg.Database.DSN), &gorm.Config{})
-	default:
-		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
-	}
+	db, err := OpenDatabase(cfg)
 	if err != nil {
 		log.Fatal("db connect error: ", err)
 	}
+
 	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		sqlDB.SetMaxIdleConns(10)
-		sqlDB.SetMaxOpenConns(100)
-	}
 
 	if err := models.AutoMigrate(db, opts.ExtraModels...); err != nil {
 		log.Fatal("migrate error: ", err)

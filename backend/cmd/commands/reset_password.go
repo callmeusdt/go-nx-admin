@@ -8,10 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 
 	"go-nx-admin/app"
 	"go-nx-admin/internal/config"
@@ -49,15 +45,7 @@ func ResetPasswordCmd() *cobra.Command {
 					log.Fatalf("mkdir %s error: %v", d, err)
 				}
 			}
-			var db *gorm.DB
-			switch cfg.Database.Driver {
-			case "mysql":
-				db, err = gorm.Open(mysql.Open(cfg.Database.DSN), &gorm.Config{})
-			case "postgres":
-				db, err = gorm.Open(postgres.Open(cfg.Database.DSN), &gorm.Config{})
-			default:
-				db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
-			}
+			db, err := app.OpenDatabase(cfg)
 			if err != nil {
 				log.Fatal("db connect error: ", err)
 			}

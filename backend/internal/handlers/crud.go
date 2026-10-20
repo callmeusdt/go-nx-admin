@@ -14,6 +14,7 @@ import (
 	"go-nx-admin/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func ListUsers(db *gorm.DB) fiber.Handler {
@@ -21,7 +22,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		var users []models.User
 		q := db.Preload("Role")
 		if name := strings.TrimSpace(c.Query("username")); name != "" {
-			q = q.Where("username LIKE ?", "%"+name+"%")
+			q = containsFold(q, "username", name)
 		}
 		if roleID := c.QueryInt("role_id", 0); roleID > 0 {
 			q = q.Where("role_id = ?", roleID)
@@ -331,16 +332,16 @@ func ListAuditLogs(db *gorm.DB) fiber.Handler {
 		var logs []models.AuditLog
 		query := db.Model(&models.AuditLog{})
 		if operator := strings.TrimSpace(c.Query("operator")); operator != "" {
-			query = query.Where("operator LIKE ?", "%"+operator+"%")
+			query = containsFold(query, "operator", operator)
 		}
 		if path := strings.TrimSpace(c.Query("path")); path != "" {
-			query = query.Where("path LIKE ?", "%"+path+"%")
+			query = containsFold(query, "path", path)
 		}
 		if method := strings.TrimSpace(c.Query("method")); method != "" {
 			query = query.Where("method = ?", method)
 		}
 		if ip := strings.TrimSpace(c.Query("ip")); ip != "" {
-			query = query.Where("ip LIKE ?", "%"+ip+"%")
+			query = containsFold(query, "ip", ip)
 		}
 		if start := strings.TrimSpace(c.Query("start")); start != "" {
 			query = query.Where("created_at >= ?", start)
@@ -361,7 +362,7 @@ func ListAuditLogs(db *gorm.DB) fiber.Handler {
 func ListApis(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var apis []models.Api
-		if err := db.Order("`group` asc").Order("id desc").Find(&apis).Error; err != nil {
+		if err := db.Order(clause.OrderByColumn{Column: clause.Column{Name: "group"}}).Order("id desc").Find(&apis).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
 		}
 		return c.JSON(fiber.Map{"data": apis})
@@ -411,16 +412,16 @@ func ListLoginLogs(db *gorm.DB) fiber.Handler {
 		var logs []models.LoginLog
 		query := db.Model(&models.LoginLog{})
 		if username := strings.TrimSpace(c.Query("username")); username != "" {
-			query = query.Where("username LIKE ?", "%"+username+"%")
+			query = containsFold(query, "username", username)
 		}
 		if status := strings.TrimSpace(c.Query("status")); status != "" {
 			query = query.Where("status = ?", status)
 		}
 		if ip := strings.TrimSpace(c.Query("ip")); ip != "" {
-			query = query.Where("ip LIKE ?", "%"+ip+"%")
+			query = containsFold(query, "ip", ip)
 		}
 		if geo := strings.TrimSpace(c.Query("geo")); geo != "" {
-			query = query.Where("geo LIKE ?", "%"+geo+"%")
+			query = containsFold(query, "geo", geo)
 		}
 		if start := strings.TrimSpace(c.Query("start")); start != "" {
 			query = query.Where("created_at >= ?", start)

@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type User struct {
@@ -309,7 +310,12 @@ func ensureSystemMenus(db *gorm.DB) {
 		{Key: "upload_allow_types", Value: "jpg,jpeg,png,gif,pdf,doc", Group: "上传设置", Type: "string", Label: "允许上传类型", Sort: 2},
 	}
 	for _, item := range configItems {
-		db.Where("key = ?", item.Key).FirstOrCreate(&SystemConfig{}, item)
+		// Match on the key alone: an operator may have edited the other fields,
+		// and "key" is reserved in MySQL so it must be quoted by GORM.
+		cond := clause.Eq{Column: clause.Column{Name: "key"}, Value: item.Key}
+		if err := db.Where(cond).Attrs(item).FirstOrCreate(&SystemConfig{}).Error; err != nil {
+			log.Printf("seed system config %s: %v", item.Key, err)
+		}
 	}
 }
 
@@ -367,7 +373,32 @@ func AutoDiscoverAPIs(app *fiber.App, db *gorm.DB) {
 	if len(knownPaths) == 0 {
 		return
 	}
-	db.Where("path LIKE ?", "/api/v1/%").Not("path||'|'||method IN (?)", knownPaths).Delete(&Api{})
+	// Compare in Go: string concatenation differs per dialect (|| is OR in MySQL).
+	known := make(map[string]bool, len(knownPaths))
+	for _, k := range knownPaths {
+		known[k] = true
+	}
+	var registered []Api
+	if err := db.Select("id", "path", "method").Where("path LIKE ?", "/api/v1/%").Find(&registered).Error; err != nil {
+		log.Printf("api auto-discover: list registered endpoints: %v", err)
+	}
+	var stale []uint
+	for _, row := range registered {
+		if !known[row.Path+"|"+row.Method] {
+			stale = append(stale, row.ID)
+		}
+	}
+	for len(stale) > 0 {
+		n := len(stale)
+		if n > 500 {
+			n = 500
+		}
+		if err := db.Delete(&Api{}, stale[:n]).Error; err != nil {
+			log.Printf("api auto-discover: remove stale endpoints: %v", err)
+			break
+		}
+		stale = stale[n:]
+	}
 	log.Printf("api auto-discover: synced %d endpoints", len(knownPaths))
 }
 

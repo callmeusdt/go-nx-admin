@@ -50,6 +50,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - Casbin 模型为 `g(r.sub, p.sub) && anchoredMatch(r.obj, p.obj) && anchoredMatch(r.act, p.act)`：整串锚定匹配（`^(?:pattern)$`），非法正则不匹配而非 panic；Admin 种子为 `admin, .*, .*`。权限展开里的路径参数写 `[^/]+`（单段），不得再写 `.*`；旧库的 `/x/.*` 策略在迁移时自动改写。免权限/免令牌路由在 `middleware/routes.go` 用精确 `METHOD /path` 维护，禁止 `HasSuffix`/`Contains` 式匹配，不擅自扩大放行范围。Fiber 已开 `CaseSensitive`+`StrictRouting`。
 - 角色权限只能通过 `PUT /roles/:slug/permissions` 提交 `{keys}` 保存；不接受原始策略，拒绝系统角色、不存在的角色和未知 key。
 - 审计异步写入须保持上下文隔离，避免复用请求 ctx。
+- 手写 SQL 须三库（SQLite/MySQL/PostgreSQL）通用：保留字列（`key`、`group`）用 `clause.Column`/`clause.Eq` 让 GORM 引用，不手写反引号或裸列名；不用 `||` 拼接做条件，在 Go 里比较；文本包含筛选用 `handlers.containsFold`（大小写不敏感且转义 `%`/`_`）。`app/dialect_test.go` 在三库跑这些路径，`NX_TEST_MYSQL_DSN`（go-sql-driver 形式）与 `NX_TEST_DATABASE_DSN` 启用后两者。
 - MFA 使用 TOTP：登录返回 `mfa_required` 后以六位码或恢复码换取正式 JWT；用户菜单提供设置，管理员用户管理入口可清空 MFA。
 - 上传：扩展名走白名单（`upload.allow_types`，默认仅无害格式；html/svg/js 等主动内容永远拒绝），按文件内容嗅探 MIME 且不信任客户端 `Content-Type`，图片/PDF 扩展名与内容必须一致；`/uploads` 响应带 `nosniff`、sandbox CSP，非图片/音视频/PDF 强制 `attachment`。
 - 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。

@@ -17,6 +17,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`;`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
 | `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期;`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
 | `secret.go` | `EnsureJWTSecret(path)`:给 `NewRuntime` 调用方的“生成一次并复用”密钥辅助 |
+| `database.go` | `OpenDatabase(cfg)`:`Run` 与 `reset-password` 共用的连库与连接池;SQLite 自动补 `_busy_timeout=5000`+WAL(`_pragma` 自管则不动),池上限 8(**不能设 1**:Casbin 适配器在事务内再用外层句柄会死锁) |
 | `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
 | `uploads.go` | `/uploads` 挂载与安全响应头;`RequiredDirs` 在 `app.go`,启动先建 data/logs/uploads/SQLite 与密钥文件父目录 |
 | `static.go` | 前端静态服务;每次请求重渲染 index.html 注入 `site.title`/favicon,`/_site/favicon` 提供本地 favicon;`assets/favicon.svg` 为内置牛图标 |
