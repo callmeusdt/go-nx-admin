@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -115,10 +116,14 @@ type RateLimitConfig struct {
 }
 
 type UploadConfig struct {
-	Dir     string   `yaml:"dir"`
-	MaxSize int64    `yaml:"max_size"`
-	Driver  string   `yaml:"driver"` // local (default) / s3
-	S3      S3Config `yaml:"s3"`
+	Dir     string `yaml:"dir"`
+	MaxSize int64  `yaml:"max_size"`
+	// AllowTypes lists the permitted file extensions (no dot, lower case).
+	// Empty uses DefaultUploadTypes. Active content such as html, svg and js is
+	// never accepted by default because uploads are served from the app origin.
+	AllowTypes []string `yaml:"allow_types"`
+	Driver     string   `yaml:"driver"` // local (default) / s3
+	S3         S3Config `yaml:"s3"`
 }
 
 // S3Config targets AWS S3 or any S3-compatible service (MinIO, OSS, COS, R2).
@@ -134,6 +139,14 @@ type S3Config struct {
 	PublicBaseURL string `yaml:"public_base_url"`
 }
 
+// DefaultUploadTypes are inert formats only.
+var DefaultUploadTypes = []string{
+	"jpg", "jpeg", "png", "gif", "webp", "bmp",
+	"pdf", "txt", "csv", "md", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+	"zip", "gz", "tar", "7z",
+	"mp3", "wav", "mp4", "webm", "mov",
+}
+
 type CaptchaConfig struct {
 	Enabled bool `yaml:"enabled"`
 	Padding int  `yaml:"padding"`
@@ -141,12 +154,13 @@ type CaptchaConfig struct {
 
 var AppConfig *Config
 
-func Load() *Config {
+// Load reads configuration from the default locations and the environment.
+// Unlike earlier versions it reports malformed YAML or environment values
+// instead of silently falling back to defaults.
+func Load() (*Config, error) {
 	cfg := &Config{
-		Server:   ServerConfig{Host: "172.18.0.1", Port: 19500, ClientIPHeader: "X-Forwarded-For"},
+		Server:   ServerConfig{Host: "127.0.0.1", Port: 19500, ClientIPHeader: "X-Forwarded-For"},
 		Database: DatabaseConfig{Driver: "sqlite", DSN: "data/nx.db"},
-		JWT:      JWTConfig{Secret: "nx-admin-jwt-secret-2024"},
-		CORS:     CORSConfig{Origins: "*"},
 		Login: LoginConfig{
 			IPWhitelistEnabled: true,
 			RateLimit: RateLimitConfig{
@@ -171,86 +185,118 @@ func Load() *Config {
 		if err != nil {
 			continue
 		}
-		yaml.Unmarshal(data, cfg)
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("config: parse %s: %w", p, err)
+		}
 		break
 	}
 
-	if v := os.Getenv("NX_SERVER_HOST"); v != "" {
-		cfg.Server.Host = v
+	env := envReader{}
+	env.str("NX_SERVER_HOST", &cfg.Server.Host)
+	env.integer("NX_SERVER_PORT", &cfg.Server.Port)
+	env.str("NX_DB_DRIVER", &cfg.Database.Driver)
+	env.str("NX_DB_DSN", &cfg.Database.DSN)
+	env.str("NX_JWT_SECRET", &cfg.JWT.Secret)
+	env.integer("NX_JWT_ACCESS_MINUTES", &cfg.JWT.AccessMinutes)
+	env.integer("NX_JWT_REFRESH_MINUTES", &cfg.JWT.RefreshMinutes)
+	env.integer("NX_JWT_MFA_MINUTES", &cfg.JWT.MFAMinutes)
+	env.str("NX_CORS_ORIGINS", &cfg.CORS.Origins)
+	env.boolean("NX_LOGIN_IP_WHITELIST_ENABLED", &cfg.Login.IPWhitelistEnabled)
+	env.boolean("NX_LOGIN_RATE_LIMIT_ENABLED", &cfg.Login.RateLimit.Enabled)
+	env.integer("NX_LOGIN_RATE_LIMIT_MAX_ATTEMPTS", &cfg.Login.RateLimit.MaxAttempts)
+	env.boolean("NX_CAPTCHA_ENABLED", &cfg.Captcha.Enabled)
+	env.str("NX_UPLOAD_DIR", &cfg.Upload.Dir)
+	env.str("NX_UPLOAD_DRIVER", &cfg.Upload.Driver)
+	env.int64("NX_UPLOAD_MAX_SIZE", &cfg.Upload.MaxSize)
+	if v := os.Getenv("NX_UPLOAD_ALLOW_TYPES"); v != "" {
+		cfg.Upload.AllowTypes = nil
+		for _, entry := range strings.Split(v, ",") {
+			if entry = strings.ToLower(strings.Trim(strings.TrimSpace(entry), ".")); entry != "" {
+				cfg.Upload.AllowTypes = append(cfg.Upload.AllowTypes, entry)
+			}
+		}
 	}
-	if v := os.Getenv("NX_SERVER_PORT"); v != "" {
-		cfg.Server.Port, _ = strconv.Atoi(v)
-	}
-	if v := os.Getenv("NX_DB_DRIVER"); v != "" {
-		cfg.Database.Driver = v
-	}
-	if v := os.Getenv("NX_DB_DSN"); v != "" {
-		cfg.Database.DSN = v
-	}
-	if v := os.Getenv("NX_JWT_SECRET"); v != "" {
-		cfg.JWT.Secret = v
-	} else if v := os.Getenv("NI" + "UBI_JWT_SECRET"); v != "" {
-		cfg.JWT.Secret = v
-	}
-	if v := os.Getenv("NX_JWT_ACCESS_MINUTES"); v != "" {
-		cfg.JWT.AccessMinutes, _ = strconv.Atoi(v)
-	}
-	if v := os.Getenv("NX_JWT_REFRESH_MINUTES"); v != "" {
-		cfg.JWT.RefreshMinutes, _ = strconv.Atoi(v)
-	}
-	if v := os.Getenv("NX_CORS_ORIGINS"); v != "" {
-		cfg.CORS.Origins = v
-	}
-	if v := os.Getenv("NX_LOGIN_IP_WHITELIST_ENABLED"); v != "" {
-		cfg.Login.IPWhitelistEnabled = v == "true"
-	}
-	if v := os.Getenv("NX_UPLOAD_DIR"); v != "" {
-		cfg.Upload.Dir = v
-	}
-	if v := os.Getenv("NX_UPLOAD_DRIVER"); v != "" {
-		cfg.Upload.Driver = v
-	}
-	if v := os.Getenv("NX_S3_ENDPOINT"); v != "" {
-		cfg.Upload.S3.Endpoint = v
-	}
-	if v := os.Getenv("NX_S3_BUCKET"); v != "" {
-		cfg.Upload.S3.Bucket = v
-	}
-	if v := os.Getenv("NX_S3_ACCESS_KEY"); v != "" {
-		cfg.Upload.S3.AccessKey = v
-	}
-	if v := os.Getenv("NX_S3_SECRET_KEY"); v != "" {
-		cfg.Upload.S3.SecretKey = v
-	}
-	if v := os.Getenv("NX_UPLOAD_MAX_SIZE"); v != "" {
-		cfg.Upload.MaxSize, _ = strconv.ParseInt(v, 10, 64)
-	}
-
+	env.str("NX_S3_ENDPOINT", &cfg.Upload.S3.Endpoint)
+	env.str("NX_S3_REGION", &cfg.Upload.S3.Region)
+	env.str("NX_S3_BUCKET", &cfg.Upload.S3.Bucket)
+	env.str("NX_S3_ACCESS_KEY", &cfg.Upload.S3.AccessKey)
+	env.str("NX_S3_SECRET_KEY", &cfg.Upload.S3.SecretKey)
+	env.boolean("NX_S3_USE_SSL", &cfg.Upload.S3.UseSSL)
+	env.boolean("NX_S3_PATH_STYLE", &cfg.Upload.S3.PathStyle)
+	env.str("NX_S3_PREFIX", &cfg.Upload.S3.Prefix)
+	env.str("NX_S3_PUBLIC_BASE_URL", &cfg.Upload.S3.PublicBaseURL)
 	if v := os.Getenv("NX_TRUSTED_PROXIES"); v != "" {
-		cfg.Server.TrustedProxies = strings.Split(v, ",")
+		cfg.Server.TrustedProxies = nil
+		for _, entry := range strings.Split(v, ",") {
+			if entry = strings.TrimSpace(entry); entry != "" {
+				cfg.Server.TrustedProxies = append(cfg.Server.TrustedProxies, entry)
+			}
+		}
 	}
 	if v, ok := os.LookupEnv("NX_CLIENT_IP_HEADER"); ok {
 		cfg.Server.ClientIPHeader = v
 	}
-	if v := os.Getenv("NX_SITE_TITLE"); v != "" {
-		cfg.Site.Title = v
-	}
-	if v := os.Getenv("NX_SITE_FAVICON"); v != "" {
-		cfg.Site.Favicon = v
-	}
-	if v := os.Getenv("NX_CACHE_DRIVER"); v != "" {
-		cfg.Cache.Driver = v
-	}
-	if v := os.Getenv("NX_REDIS_ADDR"); v != "" {
-		cfg.Cache.Redis.Addr = v
-	}
-	if v := os.Getenv("NX_REDIS_PASSWORD"); v != "" {
-		cfg.Cache.Redis.Password = v
-	}
-	if v := os.Getenv("NX_REDIS_DB"); v != "" {
-		cfg.Cache.Redis.DB, _ = strconv.Atoi(v)
+	env.str("NX_SITE_TITLE", &cfg.Site.Title)
+	env.str("NX_SITE_FAVICON", &cfg.Site.Favicon)
+	env.str("NX_CACHE_DRIVER", &cfg.Cache.Driver)
+	env.str("NX_REDIS_ADDR", &cfg.Cache.Redis.Addr)
+	env.str("NX_REDIS_PASSWORD", &cfg.Cache.Redis.Password)
+	env.integer("NX_REDIS_DB", &cfg.Cache.Redis.DB)
+	if env.err != nil {
+		return nil, env.err
 	}
 
 	AppConfig = cfg
-	return cfg
+	return cfg, nil
+}
+
+// envReader applies environment overrides and remembers the first malformed
+// value, so a typo such as NX_SERVER_PORT=80a0 fails loudly.
+type envReader struct{ err error }
+
+func (e *envReader) str(name string, dst *string) {
+	if v := os.Getenv(name); v != "" {
+		*dst = v
+	}
+}
+
+func (e *envReader) integer(name string, dst *int) {
+	v := os.Getenv(name)
+	if v == "" {
+		return
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil && e.err == nil {
+		e.err = fmt.Errorf("config: %s must be an integer", name)
+		return
+	}
+	*dst = n
+}
+
+func (e *envReader) int64(name string, dst *int64) {
+	v := os.Getenv(name)
+	if v == "" {
+		return
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil && e.err == nil {
+		e.err = fmt.Errorf("config: %s must be an integer", name)
+		return
+	}
+	*dst = n
+}
+
+// boolean accepts the usual spellings; anything else is an error rather than
+// a silent "false" that could switch a security control off.
+func (e *envReader) boolean(name string, dst *bool) {
+	v := os.Getenv(name)
+	if v == "" {
+		return
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil && e.err == nil {
+		e.err = fmt.Errorf("config: %s must be true or false", name)
+		return
+	}
+	*dst = b
 }

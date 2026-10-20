@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"path/filepath"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -56,18 +56,27 @@ func UploadMedia(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "file too large"})
 		}
 
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		now := time.Now()
-		newName := uuid.New().String() + ext
-		key := fmt.Sprintf("uploads/%s/%s/%s/%s", now.Format("2006"), now.Format("01"), now.Format("02"), newName)
-
 		src, err := file.Open()
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "cannot open uploaded file"})
 		}
 		defer src.Close()
 
-		mimeType := file.Header.Get("Content-Type")
+		head := make([]byte, 512)
+		n, _ := io.ReadFull(src, head)
+		ext, mimeType, ok := checkUpload(file.Filename, head[:n])
+		if !ok {
+			return c.Status(400).JSON(fiber.Map{"message": "file type not allowed"})
+		}
+		if _, err := src.Seek(0, io.SeekStart); err != nil {
+			return c.Status(500).JSON(fiber.Map{"message": "cannot read uploaded file"})
+		}
+
+		ext = "." + ext
+		now := time.Now()
+		newName := uuid.New().String() + ext
+		key := fmt.Sprintf("uploads/%s/%s/%s/%s", now.Format("2006"), now.Format("01"), now.Format("02"), newName)
+
 		drv := reg.Active()
 		if err := drv.Put(c.UserContext(), key, src, file.Size, mimeType); err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "write file error"})

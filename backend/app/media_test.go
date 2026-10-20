@@ -76,7 +76,7 @@ func TestMediaLocalUploadListDelete(t *testing.T) {
 	var dir string
 	h := newMediaHarness(t, func(o *RuntimeOptions) { dir = o.Config.Upload.Dir })
 
-	code, up := h.upload("pic.PNG", "png-bytes", "image/png")
+	code, up := h.upload("pic.PNG", pngHeader+"png-bytes", "image/png")
 	if code != 200 {
 		t.Fatalf("upload=%d %v", code, up)
 	}
@@ -90,7 +90,7 @@ func TestMediaLocalUploadListDelete(t *testing.T) {
 	}
 	// The object really is under the configured directory.
 	key := strings.TrimPrefix(url, "/")
-	if b, err := os.ReadFile(filepath.Join(dir, key)); err != nil || string(b) != "png-bytes" {
+	if b, err := os.ReadFile(filepath.Join(dir, key)); err != nil || string(b) != pngHeader+"png-bytes" {
 		t.Fatalf("file on disk: %q %v", b, err)
 	}
 
@@ -103,6 +103,87 @@ func TestMediaLocalUploadListDelete(t *testing.T) {
 	}
 	if len(h.list()) != 0 {
 		t.Fatal("record must be removed")
+	}
+}
+
+// pngHeader is a real PNG signature so content sniffing sees an image.
+const pngHeader = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+// The URL returned by the API must actually be served, with hardening headers,
+// and anything that is not a plain image/media type must download.
+func TestUploadedFileIsServedAtItsReturnedURL(t *testing.T) {
+	h := newMediaHarness(t, func(o *RuntimeOptions) { o.PublicUploads = true })
+	code, up := h.upload("pic.png", pngHeader, "image/png")
+	if code != 200 {
+		t.Fatalf("upload=%d", code)
+	}
+	res, err := h.r.App.Test(httptest.NewRequest("GET", up["url"].(string), nil), 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("returned URL not served: %d %q", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	if res.Header.Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(res.Header.Get("Content-Security-Policy"), "sandbox") {
+		t.Fatalf("missing hardening headers: %v", res.Header)
+	}
+
+	code, txt := h.upload("note.txt", "hello", "text/plain")
+	if code != 200 {
+		t.Fatalf("upload txt=%d", code)
+	}
+	res2, err := h.r.App.Test(httptest.NewRequest("GET", txt["url"].(string), nil), 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res2.Body.Close()
+	if res2.Header.Get("Content-Disposition") != "attachment" {
+		t.Fatalf("non-media file must download, got %q", res2.Header.Get("Content-Disposition"))
+	}
+}
+
+func TestMediaRejectsActiveAndMismatchedContent(t *testing.T) {
+	h := newMediaHarness(t, nil)
+	cases := map[string]struct{ name, content, mime string }{
+		"html":              {"x.html", "<html><script>alert(1)</script></html>", "text/html"},
+		"svg":               {"x.svg", "<svg xmlns='http://www.w3.org/2000/svg'><script/></svg>", "image/svg+xml"},
+		"html as txt":       {"x.txt", "<!DOCTYPE html><script>alert(1)</script>", "text/plain"},
+		"html as png":       {"x.png", "<html><script>alert(1)</script></html>", "image/png"},
+		"script as png":     {"x.png", "plain text pretending to be an image", "image/png"},
+		"no extension":      {"readme", "hello", "text/plain"},
+		"double ext":        {"x.png.html", pngHeader, "image/png"},
+		"unlisted":          {"x.exe", "MZ", "application/octet-stream"},
+		"upper-case active": {"X.HTML", "<html></html>", "text/html"},
+	}
+	for name, tc := range cases {
+		if code, res := h.upload(tc.name, tc.content, tc.mime); code != 400 {
+			t.Fatalf("%s: upload accepted (%d %v)", name, code, res)
+		}
+	}
+	if len(h.list()) != 0 {
+		t.Fatal("rejected uploads left records")
+	}
+	// The client-supplied MIME is not trusted: a real PNG labelled as text is
+	// stored as an image.
+	if code, _ := h.upload("ok.png", pngHeader, "text/plain"); code != 200 {
+		t.Fatalf("valid png rejected: %d", code)
+	}
+	if items := h.list(); len(items) != 1 || items[0]["type"] != "image" || items[0]["mime_type"] != "image/png" {
+		t.Fatalf("type/mime must come from the content: %v", items)
+	}
+}
+
+func TestMediaConfiguredAllowListIsHonouredButNeverActive(t *testing.T) {
+	h := newMediaHarness(t, func(o *RuntimeOptions) { o.Config.Upload.AllowTypes = []string{"txt", "html"} })
+	if code, _ := h.upload("a.txt", "hello", "text/plain"); code != 200 {
+		t.Fatalf("listed type rejected: %d", code)
+	}
+	if code, _ := h.upload("a.png", pngHeader, "image/png"); code != 400 {
+		t.Fatalf("unlisted type accepted: %d", code)
+	}
+	if code, _ := h.upload("a.html", "<html></html>", "text/html"); code != 400 {
+		t.Fatalf("active content accepted although listed: %d", code)
 	}
 }
 

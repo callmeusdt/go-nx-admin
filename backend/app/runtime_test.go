@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -203,18 +205,75 @@ func TestRuntimeWhitelistUsesExplicitConfig(t *testing.T) {
 	}
 }
 
-func TestLegacyConfigRetainsSecretEnvironmentAlias(t *testing.T) {
+func TestConfigLoadReportsBadInputAndValidates(t *testing.T) {
 	previous := config.AppConfig
 	defer func() { config.AppConfig = previous }()
-	t.Setenv("NX_JWT_SECRET", "")
-	t.Setenv("NIUBI_JWT_SECRET", strings.Repeat("legacy-test", 4))
-	cfg := config.Load()
-	if cfg.JWT.Secret != strings.Repeat("legacy-test", 4) {
-		t.Fatal("legacy key ignored")
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("CONFIG_PATH", "")
+	for _, k := range []string{"NX_JWT_SECRET", "NX_CORS_ORIGINS", "NX_SERVER_PORT", "NX_LOGIN_IP_WHITELIST_ENABLED"} {
+		t.Setenv(k, "")
 	}
-	t.Setenv("NX_JWT_SECRET", strings.Repeat("preferred-test", 4))
-	if config.Load().JWT.Secret != strings.Repeat("preferred-test", 4) {
-		t.Fatal("primary environment key did not win")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("defaults (no secret, wildcard CORS) must not validate")
+	}
+	if cfg.Server.Host == "172.18.0.1" {
+		t.Fatal("default host must not be a workstation-specific address")
+	}
+
+	t.Setenv("NX_JWT_SECRET", "nx-admin-jwt-secret-2024")
+	t.Setenv("NX_CORS_ORIGINS", "https://admin.example.test")
+	cfg, _ = config.Load()
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("published default secret accepted")
+	}
+	t.Setenv("NX_JWT_SECRET", strings.Repeat("good-secret-", 3))
+	cfg, err = config.Load()
+	if err != nil || cfg.Validate() != nil {
+		t.Fatalf("valid config rejected: %v %v", err, cfg.Validate())
+	}
+
+	for name, env := range map[string][2]string{
+		"port":      {"NX_SERVER_PORT", "80a0"},
+		"whitelist": {"NX_LOGIN_IP_WHITELIST_ENABLED", "flase"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(env[0], env[1])
+			if _, err := config.Load(); err == nil {
+				t.Fatalf("%s=%q accepted", env[0], env[1])
+			}
+		})
+	}
+	t.Setenv("NX_SERVER_PORT", "")
+	t.Setenv("NX_LOGIN_IP_WHITELIST_ENABLED", "1")
+	if cfg, err := config.Load(); err != nil || !cfg.Login.IPWhitelistEnabled {
+		t.Fatalf("'1' must parse as true: %v", err)
+	}
+	t.Setenv("NX_LOGIN_IP_WHITELIST_ENABLED", "")
+
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("server: [unclosed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(); err == nil {
+		t.Fatal("malformed YAML silently ignored")
+	}
+}
+
+func TestTokensNeedConfiguredKey(t *testing.T) {
+	previous := config.AppConfig
+	defer func() { config.AppConfig = previous }()
+	config.AppConfig = nil
+	t.Setenv("NX_JWT_SECRET", strings.Repeat("env-must-not-be-used", 2))
+	if _, err := middleware.GenerateToken(1, "u", "admin", 1); err == nil {
+		t.Fatal("token signed without a configured key")
+	}
+	if _, err := middleware.ParseToken("a.b.c"); err == nil {
+		t.Fatal("token parsed without a configured key")
 	}
 }
 
@@ -275,5 +334,14 @@ func TestRuntimeShutdownTimeoutKeepsSingletonReserved(t *testing.T) {
 	r.closeErr = nil
 	if err := r.Close(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Run and NewRuntime must share one security floor.
+func TestRuntimeUsesSharedConfigValidation(t *testing.T) {
+	opts := runtimeOptions(t)
+	opts.Config.JWT.Secret = "nx-admin-jwt-secret-2024"
+	if _, err := NewRuntime(opts); err == nil {
+		t.Fatal("published default secret accepted by NewRuntime")
 	}
 }

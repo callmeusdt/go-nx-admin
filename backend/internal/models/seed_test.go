@@ -31,8 +31,11 @@ func TestSeedCreatesDefaultAdminWithoutMFA(t *testing.T) {
 	if user.MFAEnabled {
 		t.Fatal("default admin MFA is enabled")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("qwer1234")); err != nil {
-		t.Fatal("default admin password does not match qwer1234")
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("qwer1234")) == nil {
+		t.Fatal("default admin still uses the published password")
+	}
+	if !user.MustChangePassword {
+		t.Fatal("default admin must change the initial password")
 	}
 
 	var users int64

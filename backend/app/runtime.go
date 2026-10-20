@@ -92,20 +92,8 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	if opts.DB == nil {
 		return nil, errors.New("app: database is required")
 	}
-	if opts.Config.Server.Host == "" || opts.Config.Server.Port < 1 || opts.Config.Server.Port > 65535 {
-		return nil, errors.New("app: explicit host and valid port are required")
-	}
-	if len(opts.Config.JWT.Secret) < 32 {
-		return nil, errors.New("app: JWT secret must contain at least 32 bytes")
-	}
-	if opts.Config.CORS.Origins == "" || strings.Contains(opts.Config.CORS.Origins, "*") {
-		return nil, errors.New("app: explicit CORS origins are required")
-	}
-	for _, origin := range strings.Split(opts.Config.CORS.Origins, ",") {
-		u, err := url.Parse(strings.TrimSpace(origin))
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return nil, errors.New("app: invalid CORS origin")
-		}
+	if err := opts.Config.Validate(); err != nil {
+		return nil, fmt.Errorf("app: %w", err)
 	}
 	if opts.PublicUploads && (opts.DisableMedia || opts.Config.Upload.Dir == "") {
 		return nil, errors.New("app: public uploads require media and an explicit directory")
@@ -190,7 +178,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	})
 	routes.RegisterWithOptions(r.App, opts.DB, enforcer, opts.Extensions.ExtraRoutes, opts.DisableMedia)
 	if opts.PublicUploads {
-		r.App.Static("/uploads", opts.Config.Upload.Dir)
+		serveUploads(r.App, opts.Config.Upload.Dir)
 	}
 	r.App.Use(func(c *fiber.Ctx) error {
 		p := c.Path()

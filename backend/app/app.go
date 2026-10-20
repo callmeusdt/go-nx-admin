@@ -46,7 +46,13 @@ type Options struct {
 type PermissionDef = models.PermissionDef
 
 func Run(opts Options) {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	if cfg.Session.Cookie {
 		log.Fatal("cookie sessions require app.NewRuntime with explicit migration and bootstrap")
 	}
@@ -146,7 +152,7 @@ func Run(opts Options) {
 	routes.Register(app, db, enforcer, opts.ExtraRoutes)
 	models.AutoDiscoverAPIs(app, db)
 
-	app.Static("/uploads", cfg.Upload.Dir)
+	serveUploads(app, cfg.Upload.Dir)
 
 	if opts.EmbedFS != nil {
 		app.Use("/*", adaptor.HTTPHandler(StaticHandler(opts.EmbedFS)))

@@ -1,5 +1,5 @@
 server:
-  host: 172.18.0.1
+  host: 127.0.0.1                # use 0.0.0.0 to listen on all interfaces behind a proxy
   port: 19500
   # Client address behind a reverse proxy (Cloudflare -> nginx -> nxadmin).
   # Headers are read only when the TCP peer is in trusted_proxies, and only the
@@ -20,7 +20,9 @@ database:
   # postgres: host=localhost user=postgres password=xxx dbname=nxadmin port=5432 sslmode=disable
 
 jwt:
-  secret: nx-admin-jwt-secret-2024
+  # REQUIRED. At least 32 random bytes, e.g. `openssl rand -hex 32`.
+  # The server refuses to start with an empty, short or published-default value.
+  secret: ""
   access_minutes: 30             # access token lifetime
   refresh_minutes: 10080         # refresh token lifetime (7 days)
   mfa_minutes: 5                 # interim token between password and MFA code
@@ -30,7 +32,8 @@ site:
   favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
 
 cors:
-  origins: "*"
+  # REQUIRED. Comma-separated exact origins; wildcards are rejected.
+  origins: "http://127.0.0.1:5173"
 
 # Strict cookie/MFA mode is only supported by app.NewRuntime, with explicit
 # migration/bootstrap and one HTTPS session.origin equal to cors.origins.
@@ -51,6 +54,10 @@ login:
 upload:
   dir: ./uploads
   max_size: 10485760
+  # Permitted extensions (default: common images, documents, archives, audio/video).
+  # html/svg/js and other active formats are always refused. Content is sniffed,
+  # so a renamed file is rejected too.
+  # allow_types: [jpg, png, pdf]
   driver: local                  # local / s3 (AWS S3, MinIO, Aliyun OSS, Tencent COS, R2)
   # Files already uploaded stay reachable after switching drivers; each record
   # remembers which driver holds it.

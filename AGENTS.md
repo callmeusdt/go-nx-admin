@@ -51,6 +51,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 角色权限只能通过 `PUT /roles/:slug/permissions` 提交 `{keys}` 保存；不接受原始策略，拒绝系统角色、不存在的角色和未知 key。
 - 审计异步写入须保持上下文隔离，避免复用请求 ctx。
 - MFA 使用 TOTP：登录返回 `mfa_required` 后以六位码或恢复码换取正式 JWT；用户菜单提供设置，管理员用户管理入口可清空 MFA。
+- 上传：扩展名走白名单（`upload.allow_types`，默认仅无害格式；html/svg/js 等主动内容永远拒绝），按文件内容嗅探 MIME 且不信任客户端 `Content-Type`，图片/PDF 扩展名与内容必须一致；`/uploads` 响应带 `nosniff`、sandbox CSP，非图片/音视频/PDF 强制 `attachment`。
 - 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。
 - 现有 IP 解析涉及 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP`；geo 使用 ip-api，800ms 超时且失败留空。改动前核对实际代理信任边界，不把 header 或 geo 当作已验证身份。
 - 每次登录建立独立会话，注销只清当前 token；只能踢非当前会话。
@@ -68,11 +69,11 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 ## 配置与运行
 
 - 运行配置用根目录 `config.yaml`，模板为 `config.example.yaml`；环境变量覆盖对应配置。数据库支持 SQLite/MySQL/Postgres，默认 SQLite 路径 `data/nx.db` 相对工作目录。
-- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。种子账号和默认 JWT/CORS 配置以模板、seed 为准，不把默认值当生产凭据。
-- 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `172.18.0.1:19500`；健康入口 `/health`。
+- `serve` 会自动迁移、建表及写种子，不能当只读健康检查。`config.Validate()` 为 `Run` 与 `NewRuntime` 共用：`jwt.secret` 须≥32字节且不是已发布默认值，`cors.origins` 须为明确 origin（禁通配），否则拒绝启动；`config.Load` 返回 error（YAML/环境变量格式错误不再静默回落默认值，布尔变量用 ParseBool）。首次种子管理员 `admin` 使用随机初始密码，仅在启动日志打印一次且 `must_change_password=true`；`reset-password` 不带密码时同样随机生成并强制改密、踢掉其在线会话。
+- 后端 `server.host/port` 或 `NX_SERVER_HOST/PORT` 控制监听，默认 `127.0.0.1:19500`（本机验收可设 `NX_SERVER_HOST=172.18.0.1`）；健康入口 `/health`。
 - Vite 默认 `172.18.0.1:5173`，`VITE_HOST` 覆盖 host，`/api` 代理到后端。运行前读 manifest/lock、Makefile，避免照搬二开项目命令。
 - 常用入口：`make build-frontend` 构建并复制 embed 资源，`make dev-frontend` 热更新，`make build` 完整构建，`./nx-admin serve` 启动。密码重置命令会写数据，仅在授权内使用。
-- 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，种子账号见 `models.go`）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
+- 测试监听约定（本机验收用，开发者在浏览器里看效果）：开始改动前代理主动拉起并告知访问地址；push 完成后再关闭。后端在 `backend/` 下 `NX_SERVER_HOST=172.18.0.1 NX_JWT_SECRET=<32字节以上> NX_CORS_ORIGINS=http://172.18.0.1:8001 go run ./cmd serve`（`172.18.0.1:19500`，会建表写种子，初始 admin 密码见启动日志）；前端在 `frontend/` 下 `VITE_HOST=172.18.0.1 npx vite --port 8001 --strictPort`（5173 常被其他项目占用，不要抢）。关闭按端口查进程号后精确 `kill <pid>`，不用 `pkill -f`（会匹配到自身命令行）。只在用户明确要求停时提前关闭；运行日志、数据库和构建产物写到仓库外或已忽略路径，不进 git。
 
 ## Submodule 构建
 

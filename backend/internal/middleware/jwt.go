@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"os"
+	"errors"
 	"time"
 
 	"go-nx-admin/internal/config"
@@ -10,18 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// jwtSecret returns the configured signing key. There is deliberately no
+// fallback: with no configuration a token can neither be signed nor verified,
+// instead of silently using a published default.
 func jwtSecret() []byte {
-	if config.AppConfig != nil && config.AppConfig.JWT.Secret != "" {
+	if config.AppConfig != nil {
 		return []byte(config.AppConfig.JWT.Secret)
 	}
-	secret := os.Getenv("NX_JWT_SECRET")
-	if secret == "" {
-		secret = os.Getenv("NI" + "UBI_JWT_SECRET")
-	}
-	if secret == "" {
-		secret = "nx-admin-jwt-secret-2024"
-	}
-	return []byte(secret)
+	return nil
 }
 
 const PurposeMFA = "mfa"
@@ -54,7 +50,11 @@ func signToken(userID uint, username, role string, roleID uint, purpose string, 
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
+	secret := jwtSecret()
+	if len(secret) == 0 {
+		return "", errors.New("jwt: signing key is not configured")
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
 }
 
 // GenerateToken issues a short-lived access token.
@@ -69,8 +69,12 @@ func GenerateMFAToken(userID uint, username, role string, roleID uint) (string, 
 
 func ParseToken(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		return jwtSecret(), nil
-	})
+		secret := jwtSecret()
+		if len(secret) == 0 {
+			return nil, errors.New("jwt: signing key is not configured")
+		}
+		return secret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
 		return nil, err
 	}

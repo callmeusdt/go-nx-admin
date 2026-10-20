@@ -197,7 +197,7 @@ func TestAdminCanFlagUsersAndPolicyAppliesToCreateAndEdit(t *testing.T) {
 	}
 }
 
-func TestSeedAdminIsNotForcedToChangePassword(t *testing.T) {
+func TestSeedAdminGetsRandomPasswordAndMustChangeIt(t *testing.T) {
 	opts := runtimeOptions(t)
 	if err := MigrateSchema(opts.DB); err != nil {
 		t.Fatal(err)
@@ -207,19 +207,23 @@ func TestSeedAdminIsNotForcedToChangePassword(t *testing.T) {
 	}
 	var admin models.User
 	opts.DB.Where("username = ?", "admin").First(&admin)
-	if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("qwer1234")) != nil {
-		t.Fatal("seed admin must keep the documented default password")
+	for _, known := range []string{"qwer1234", "admin123", "admin"} {
+		if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(known)) == nil {
+			t.Fatalf("seed admin accepts the published password %q", known)
+		}
 	}
-	if admin.MustChangePassword {
-		t.Fatal("seed admin must not be forced to change password; operators opt in themselves")
+	if !admin.MustChangePassword {
+		t.Fatal("seed admin must be forced to change the initial password")
 	}
-	// Re-running the seed on an existing deployment must not flag it either.
+	// A second seed must not reset or re-flag an existing deployment.
+	first := admin.Password
+	opts.DB.Model(&admin).Update("must_change_password", false)
 	if err := models.Seed(opts.DB); err != nil {
 		t.Fatal(err)
 	}
 	opts.DB.First(&admin, admin.ID)
-	if admin.MustChangePassword {
-		t.Fatal("a repeated seed must not flag the default admin")
+	if admin.Password != first || admin.MustChangePassword {
+		t.Fatal("repeated seed changed an existing administrator")
 	}
 }
 

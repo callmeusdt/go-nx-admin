@@ -1,7 +1,9 @@
 package models
 
 import (
+	"crypto/rand"
 	"log"
+	"math/big"
 	"strings"
 	"time"
 
@@ -165,15 +167,23 @@ func Seed(db *gorm.DB) error {
 		return err
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte("qwer1234"), bcrypt.DefaultCost)
+	// Every deployment gets its own first password, shown once in the log, and
+	// the account must replace it at first sign-in. A published default would
+	// be a working credential on every fresh install.
+	initialPassword, err := randomPassword()
+	if err != nil {
+		return err
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(initialPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 	adminUser := User{
-		Username: "admin",
-		Password: string(hashed),
-		Status:   1,
-		RoleID:   adminRole.ID,
+		Username:           "admin",
+		Password:           string(hashed),
+		Status:             1,
+		RoleID:             adminRole.ID,
+		MustChangePassword: true,
 	}
 	if err := db.Create(&adminUser).Error; err != nil {
 		return err
@@ -208,8 +218,24 @@ func Seed(db *gorm.DB) error {
 	ensureApiSeeds(db)
 	ensureAdminRoleMenus(db)
 
-	log.Println("seed data created: admin/qwer1234 (MFA disabled); change this password after first sign-in")
+	log.Printf("seed data created: initial administrator admin / %s (shown once; it must be changed at first sign-in)", initialPassword)
 	return nil
+}
+
+// randomPassword returns 20 characters (~119 bits) of unambiguous characters,
+// inside the 8-32 byte password policy.
+func randomPassword() (string, error) {
+	const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	buf := make([]byte, 20)
+	limit := big.NewInt(int64(len(alphabet)))
+	for i := range buf {
+		n, err := rand.Int(rand.Reader, limit)
+		if err != nil {
+			return "", err
+		}
+		buf[i] = alphabet[n.Int64()]
+	}
+	return string(buf), nil
 }
 
 func ensureSystemMenus(db *gorm.DB) {
