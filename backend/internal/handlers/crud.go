@@ -508,7 +508,7 @@ func MyMenus(db *gorm.DB) fiber.Handler {
 			return c.Status(404).JSON(fiber.Map{"message": "role not found"})
 		}
 
-		query := db.Model(&models.Menu{}).Order("sort asc").Order("id asc")
+		query := db.Model(&models.Menu{}).Order("admin_menus.sort asc").Order("admin_menus.id asc")
 		if !role.IsSystem {
 			query = query.Joins("JOIN admin_role_menus ON admin_role_menus.menu_id = admin_menus.id AND admin_role_menus.role_id = ?", roleID)
 		}
@@ -654,42 +654,53 @@ func ListRolePolicies(e *casbin.Enforcer) fiber.Handler {
 	}
 }
 
-func SaveRolePolicies(e *casbin.Enforcer) fiber.Handler {
+// SaveRolePermissions replaces a role's policies with the expansion of the
+// submitted permission keys. Raw policies are never accepted: a caller who may
+// edit permissions could otherwise grant itself ".*", write a pattern that
+// breaks matching for the role, or rewrite the system role.
+func SaveRolePermissions(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Fiber's Params string aliases the request buffer; the enforcer keeps
 		// it in memory after the request ends, so it must be copied.
-		role := strings.Clone(c.Params("slug"))
+		slug := strings.Clone(c.Params("slug"))
 		var req struct {
-			Keys     []string   `json:"keys"`
-			Policies [][]string `json:"policies"`
+			Keys []string `json:"keys"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-
-		// Raw policies are already (path, method) as the Casbin model expects.
-		// Expanded permissions are (method, path), so flip them before storing;
-		// otherwise the saved rule can never match a request.
-		policies := req.Policies
-		if len(req.Keys) > 0 {
-			expanded := models.ExpandPermissionKeys(req.Keys)
-			policies = make([][]string, 0, len(expanded))
-			for _, p := range expanded {
-				if len(p) >= 2 {
-					policies = append(policies, []string{p[1], p[0]})
-				}
+		var role models.Role
+		if err := db.Where("slug = ?", slug).First(&role).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"message": "role not found"})
+		}
+		if role.IsSystem {
+			return c.Status(403).JSON(fiber.Map{"message": "system role permissions cannot be changed"})
+		}
+		known := map[string]bool{}
+		for _, def := range models.AllPermissionDefs() {
+			known[def.Key] = true
+		}
+		for _, key := range req.Keys {
+			if !known[key] {
+				return c.Status(400).JSON(fiber.Map{"message": "unknown permission: " + key})
 			}
 		}
 
-		e.RemoveFilteredPolicy(0, role)
-		for _, policy := range policies {
-			if len(policy) < 2 {
-				continue
+		// Expansions are (method, path); the Casbin model stores (path, method).
+		expanded := models.ExpandPermissionKeys(req.Keys)
+		policies := make([][]string, 0, len(expanded))
+		for _, p := range expanded {
+			if len(p) >= 2 {
+				policies = append(policies, []string{slug, p[1], p[0]})
 			}
-			e.AddPolicy(role, policy[0], policy[1])
 		}
-		if err := e.SavePolicy(); err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+		if _, err := e.RemoveFilteredPolicy(0, slug); err != nil {
+			return c.Status(500).JSON(fiber.Map{"message": "internal error"})
+		}
+		if len(policies) > 0 {
+			if _, err := e.AddPolicies(policies); err != nil {
+				return c.Status(500).JSON(fiber.Map{"message": "internal error"})
+			}
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}

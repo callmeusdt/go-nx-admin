@@ -13,7 +13,7 @@ func JWTAuth(db *gorm.DB) fiber.Handler {
 		if CookieMode() {
 			return BrowserAuth(db)(c)
 		}
-		if strings.HasSuffix(c.Path(), "/login") || strings.HasSuffix(c.Path(), "/captcha") || strings.HasSuffix(c.Path(), "/auth/refresh") {
+		if isTokenless(c) {
 			return c.Next()
 		}
 
@@ -32,10 +32,11 @@ func JWTAuth(db *gorm.DB) fiber.Handler {
 			})
 		}
 
-		isMfaPath := strings.Contains(c.Path(), "/mfa/")
-		// An interim MFA token proves only the password step. It must never act
-		// as an access token, and the only thing it may reach is MFA verify.
-		if claims.Purpose == PurposeMFA && !strings.HasSuffix(c.Path(), "/mfa/verify") {
+		// An interim MFA token proves only the password step. It has no online
+		// session yet, must never act as an access token, and may only reach
+		// MFA verify.
+		isMfaPath := claims.Purpose == PurposeMFA
+		if isMfaPath && routeKey(c.Method(), c.Path()) != mfaVerifyRoute {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "invalid or expired token"})
 		}
 

@@ -47,7 +47,8 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - `app.BootstrapAdmin(db,username,password)`支持PostgreSQL/MySQL(MariaDB)/SQLite，要求已显式迁移且管理种子表为空；PG表锁、MySQL命名锁、SQLite进程内互斥+写锁保证并发仅一次；密码由调用方传入（8～32字节），不生成默认密码，重复执行返回`ErrAdminAlreadyInitialized`且不修改已有账号。初始化账号尚未MFA注册，须经严格模式注册后才能执行业务。
 
 - JWT 有效期 24h；`JWTAuth` 校验 token 对应的 `admin_online_users` 会话，MFA 验证路径不做在线会话检查。修改认证前先核对 middleware 和路由例外，不以菜单可见性代替认证。
-- Casbin 模型为 `g(r.sub, p.sub) && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)`；Admin 种子为 `admin, .*, .*`。原有 login/verify-password 等路由例外按注册实现维护，不擅自扩大放行范围。
+- Casbin 模型为 `g(r.sub, p.sub) && anchoredMatch(r.obj, p.obj) && anchoredMatch(r.act, p.act)`：整串锚定匹配（`^(?:pattern)$`），非法正则不匹配而非 panic；Admin 种子为 `admin, .*, .*`。权限展开里的路径参数写 `[^/]+`（单段），不得再写 `.*`；旧库的 `/x/.*` 策略在迁移时自动改写。免权限/免令牌路由在 `middleware/routes.go` 用精确 `METHOD /path` 维护，禁止 `HasSuffix`/`Contains` 式匹配，不擅自扩大放行范围。Fiber 已开 `CaseSensitive`+`StrictRouting`。
+- 角色权限只能通过 `PUT /roles/:slug/permissions` 提交 `{keys}` 保存；不接受原始策略，拒绝系统角色、不存在的角色和未知 key。
 - 审计异步写入须保持上下文隔离，避免复用请求 ctx。
 - MFA 使用 TOTP：登录返回 `mfa_required` 后以六位码或恢复码换取正式 JWT；用户菜单提供设置，管理员用户管理入口可清空 MFA。
 - 用户可管理自己的登录 IP 白名单，管理员可管理其他用户；密码通过后匹配，无规则默认放行。`NX_LOGIN_IP_WHITELIST_ENABLED=false` 可关闭开关，不能把调试关闭作为默认安全状态。

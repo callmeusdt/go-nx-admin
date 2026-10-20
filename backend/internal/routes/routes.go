@@ -54,9 +54,8 @@ func RegisterWithOptions(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer,
 	api.Get("/roles/:id/menus", handlers.RoleMenuIDs(db))
 	api.Put("/roles/:id/menus", handlers.SaveRoleMenus(db))
 	api.Get("/roles/:slug/policies", handlers.ListRolePolicies(enforcer))
-	api.Put("/roles/:slug/policies", handlers.SaveRolePolicies(enforcer))
 	api.Get("/roles/:slug/permissions", handlers.ListRolePermissions(enforcer))
-	api.Put("/roles/:slug/permissions", handlers.SaveRolePolicies(enforcer))
+	api.Put("/roles/:slug/permissions", handlers.SaveRolePermissions(enforcer, db))
 
 	api.Get("/menus", handlers.ListMenus(db))
 	api.Post("/menus", handlers.CreateMenu(db))

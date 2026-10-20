@@ -138,7 +138,7 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 			result, resultErr = nil, errors.New("app: runtime construction failed")
 		}
 	}()
-	r.App = fiber.New(fiber.Config{DisableStartupMessage: true,
+	r.App = fiber.New(fiber.Config{DisableStartupMessage: true, CaseSensitive: true, StrictRouting: true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			status := fiber.StatusInternalServerError
 			var fe *fiber.Error
@@ -276,5 +276,8 @@ func MigrateSchema(db *gorm.DB, extraModels ...interface{}) error {
 	if err := db.Table("admin_casbin_rule").AutoMigrate(&gormadapter.CasbinRule{}); err != nil {
 		return err
 	}
-	return middleware.NormalizeLegacyPolicies(db)
+	if err := middleware.NormalizeLegacyPolicies(db); err != nil {
+		return err
+	}
+	return middleware.UpgradeWildcardPolicies(db)
 }

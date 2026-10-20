@@ -2,11 +2,14 @@ package middleware
 
 import (
 	"log"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/gofiber/fiber/v2"
 	"go-nx-admin/internal/models"
@@ -27,8 +30,54 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)
+m = g(r.sub, p.sub) && anchoredMatch(r.obj, p.obj) && anchoredMatch(r.act, p.act)
 `
+
+var (
+	anchoredMu    sync.RWMutex
+	anchoredCache = map[string]*regexp.Regexp{}
+)
+
+// anchoredMatch reports whether the whole of key matches the policy pattern.
+// Casbin's built-in regexMatch is unanchored, so "/api/v1/roles" also matched
+// "/api/v1/roles/x/permissions". A pattern that does not compile matches
+// nothing instead of panicking the request.
+func anchoredMatch(key, pattern string) bool {
+	anchoredMu.RLock()
+	re, ok := anchoredCache[pattern]
+	anchoredMu.RUnlock()
+	if !ok {
+		compiled, err := regexp.Compile(`^(?:` + pattern + `)$`)
+		if err != nil {
+			compiled = nil
+		}
+		anchoredMu.Lock()
+		if len(anchoredCache) > 4096 {
+			anchoredCache = map[string]*regexp.Regexp{}
+		}
+		anchoredCache[pattern] = compiled
+		anchoredMu.Unlock()
+		re = compiled
+	}
+	return re != nil && re.MatchString(key)
+}
+
+// newEnforcer builds the enforcer without loading policies: the matcher
+// function has to be registered before any policy is evaluated, and Casbin
+// resets its function table during initialisation.
+func newEnforcer(m model.Model, a persist.Adapter) (*casbin.Enforcer, error) {
+	e, err := casbin.NewEnforcer(m)
+	if err != nil {
+		return nil, err
+	}
+	e.AddFunction("anchoredMatch", func(args ...interface{}) (interface{}, error) {
+		key, _ := args[0].(string)
+		pattern, _ := args[1].(string)
+		return anchoredMatch(key, pattern), nil
+	})
+	e.SetAdapter(a)
+	return e, nil
+}
 
 // NormalizeLegacyPolicies repairs rules saved as (role, method, path) by older
 // versions of the permission editor, which could never match a request. It is
@@ -63,8 +112,41 @@ func NormalizeLegacyPolicies(db *gorm.DB) error {
 	})
 }
 
+// UpgradeWildcardPolicies rewrites role policies saved with the old ".*"
+// wildcard (which matched across path segments, and unanchored) to the
+// single-segment form. The admin ".*" grant is left alone. Idempotent.
+func UpgradeWildcardPolicies(db *gorm.DB) error {
+	const table = "admin_casbin_rule"
+	if !db.Migrator().HasTable(table) {
+		return nil
+	}
+	var rows []struct {
+		ID uint
+		V1 string
+	}
+	if err := db.Table(table).Select("id, v1").
+		Where("ptype = ? AND v1 LIKE ?", "p", "/api/%").Find(&rows).Error; err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, r := range rows {
+			next := models.LegacyWildcardPolicy(r.V1)
+			if next == r.V1 {
+				continue
+			}
+			if err := tx.Table(table).Where("id = ?", r.ID).Update("v1", next).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func InitCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
 	if err := NormalizeLegacyPolicies(db); err != nil {
+		return nil, err
+	}
+	if err := UpgradeWildcardPolicies(db); err != nil {
 		return nil, err
 	}
 	m, err := model.NewModelFromString(rbacModel)
@@ -75,7 +157,7 @@ func InitCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
 	if err != nil {
 		return nil, err
 	}
-	e, err := casbin.NewEnforcer(m, a)
+	e, err := newEnforcer(m, a)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +194,14 @@ func LoadCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return casbin.NewEnforcer(m, a)
+	e, err := newEnforcer(m, a)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.LoadPolicy(); err != nil {
+		return nil, err
+	}
+	return e, nil
 }
 
 func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
@@ -121,19 +210,7 @@ func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 		path := c.Path()
 		method := c.Method()
 
-		if CookieMode() {
-			switch method + " " + path {
-			case "POST /api/v1/auth/login", "GET /api/v1/auth/captcha", "POST /api/v1/auth/logout", "GET /api/v1/auth/me", "GET /api/v1/auth/permissions", "POST /api/v1/auth/verify-password", "POST /api/v1/auth/password", "POST /api/v1/auth/unlock", "POST /api/v1/auth/mfa/verify", "POST /api/v1/auth/mfa/setup", "POST /api/v1/auth/mfa/enable", "POST /api/v1/auth/mfa/disable", "POST /api/v1/auth/mfa/recovery-codes":
-				return c.Next()
-			}
-		} else if !strings.HasPrefix(path, "/api/") ||
-			strings.HasSuffix(path, "/login") ||
-			strings.HasSuffix(path, "/captcha") ||
-			strings.HasSuffix(path, "/auth/refresh") ||
-			strings.HasSuffix(path, "/verify-password") ||
-			path == "/api/v1/auth/password" ||
-			path == "/api/v1/auth/permissions" ||
-			strings.Contains(path, "/mfa/") {
+		if permissionExempt(method, path) {
 			return c.Next()
 		}
 

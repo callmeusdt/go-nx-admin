@@ -320,3 +320,134 @@ func TestBatchAuthorizationFollowsPermissionKeys(t *testing.T) {
 		t.Fatalf("users:edit role reached batch delete: %d", c)
 	}
 }
+
+// Casbin's regexMatch was unanchored and ".*" crossed path segments, so a role
+// holding one permission silently reached sibling and nested routes.
+func TestPermissionsDoNotLeakToNestedOrSiblingRoutes(t *testing.T) {
+	h := newFileHarness(t)
+	admin, _ := h.login()
+
+	lister := loginAs(t, h, "rolelister", []string{"roles:list"}, admin)
+	if c, _ := h.do("GET", "/api/v1/roles", "", lister); c != 200 {
+		t.Fatalf("roles:list denied its own route: %d", c)
+	}
+	if c, _ := h.do("GET", "/api/v1/roles/admin/permissions", "", lister); c != 403 {
+		t.Fatalf("roles:list reached nested /permissions: %d", c)
+	}
+	if c, _ := h.do("GET", "/api/v1/roles/admin/menus", "", lister); c != 403 {
+		t.Fatalf("roles:list reached nested /menus: %d", c)
+	}
+
+	// roles:edit must not edit permissions of any role, including its own.
+	editor := loginAs(t, h, "roleeditor", []string{"roles:edit"}, admin)
+	if c, _ := h.do("PUT", "/api/v1/roles/roleeditor/permissions", body(map[string]any{"keys": []string{"roles:permissions"}}), editor); c != 403 {
+		t.Fatalf("roles:edit escalated through /permissions: %d", c)
+	}
+
+	// auth/me must not be a prefix of auth/menus.
+	profile := loginAs(t, h, "profileonly", []string{"profile:view"}, admin)
+	if c, _ := h.do("GET", "/api/v1/auth/me", "", profile); c != 200 {
+		t.Fatalf("profile:view denied /auth/me: %d", c)
+	}
+	if c, _ := h.do("GET", "/api/v1/auth/menus", "", profile); c != 200 {
+		t.Fatalf("every signed-in user needs /auth/menus: %d", c)
+	}
+
+	// users:list must not read the nested IP whitelist; users:delete must not
+	// clear MFA.
+	users := loginAs(t, h, "userlister", []string{"users:list", "users:delete"}, admin)
+	if c, _ := h.do("GET", "/api/v1/users/1/ip-whitelists", "", users); c != 403 {
+		t.Fatalf("users:list reached ip-whitelists: %d", c)
+	}
+	if c, _ := h.do("DELETE", "/api/v1/users/1/mfa", "", users); c != 403 {
+		t.Fatalf("users:delete reached clear-MFA: %d", c)
+	}
+}
+
+// Trailing slashes and case variants used to match the MFA/login exemptions
+// by substring and skip authorization entirely.
+func TestRouteExemptionsAreExact(t *testing.T) {
+	h := newFileHarness(t)
+	admin, _ := h.login()
+	plain := loginAs(t, h, "plainmfa", []string{"users:list"}, admin)
+	for _, path := range []string{"/api/v1/users/1/mfa/", "/api/v1/users/1/mfa", "/API/v1/users/1/mfa", "/api/v1/users/1/mfa/x"} {
+		if c, _ := h.do("DELETE", path, "", plain); c == 200 {
+			t.Fatalf("DELETE %s succeeded for a role without users:mfa", path)
+		}
+	}
+	// A route that merely ends in /login must not be tokenless.
+	if c, _ := h.do("GET", "/api/v1/users/login", "", ""); c != 401 && c != 404 {
+		t.Fatalf("suffix /login treated as public: %d", c)
+	}
+}
+
+func TestSaveRolePermissionsIsRestricted(t *testing.T) {
+	h := newFileHarness(t)
+	admin, _ := h.login()
+	loginAs(t, h, "target", nil, admin)
+	h.db.Model(&models.Role{}).Where("slug = ?", "admin").Update("is_system", true)
+
+	save := func(slug string, payload any) int {
+		c, _ := h.do("PUT", "/api/v1/roles/"+slug+"/permissions", body(payload), admin)
+		return c
+	}
+	if c := save("target", map[string]any{"policies": [][]string{{".*", ".*"}}}); c != 200 {
+		t.Fatalf("raw policies must be ignored, not stored: %d", c)
+	}
+	var count int64
+	h.db.Table("admin_casbin_rule").Where("v0 = ? AND v1 = ?", "target", ".*").Count(&count)
+	if count != 0 {
+		t.Fatal("raw wildcard policy was stored")
+	}
+	if c := save("target", map[string]any{"keys": []string{"nope:nope"}}); c != 400 {
+		t.Fatalf("unknown permission key accepted: %d", c)
+	}
+	if c := save("admin", map[string]any{"keys": []string{"users:list"}}); c != 403 {
+		t.Fatalf("system role rewritten: %d", c)
+	}
+	if c := save("ghost", map[string]any{"keys": []string{"users:list"}}); c != 404 {
+		t.Fatalf("missing role accepted: %d", c)
+	}
+	if c, _ := h.do("PUT", "/api/v1/roles/target/policies", `{"policies":[[".*",".*"]]}`, admin); c != 404 {
+		t.Fatalf("raw policies endpoint still exists: %d", c)
+	}
+	admin2, _ := h.login()
+	if c, _ := h.do("GET", "/api/v1/users", "", admin2); c != 200 {
+		t.Fatalf("admin lost access: %d", c)
+	}
+}
+
+func TestLegacyWildcardPoliciesUpgradeAndStillGrant(t *testing.T) {
+	var db *gorm.DB
+	h := newBearerHarnessSeeded(t, func(o *RuntimeOptions) {
+		d, _ := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "wild.db")), &gorm.Config{})
+		o.DB = d
+		db = d
+	}, func(o *RuntimeOptions) {
+		o.DB.Create(&models.Role{Name: "Old", Slug: "old"})
+		hash, _ := bcrypt.GenerateFromPassword([]byte("old-user-pass-1"), bcrypt.MinCost)
+		var role models.Role
+		o.DB.Where("slug = ?", "old").First(&role)
+		o.DB.Create(&models.User{Username: "olduser", Password: string(hash), RoleID: role.ID, Status: 1})
+		o.DB.Exec(`INSERT INTO admin_casbin_rule(ptype,v0,v1,v2) VALUES('p','old','/api/v1/users/.*','PUT')`)
+		o.DB.Exec(`INSERT INTO admin_casbin_rule(ptype,v0,v1,v2) VALUES('p','old','/api/v1/users','GET')`)
+		if err := MigrateSchema(o.DB); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var v1 []string
+	db.Table("admin_casbin_rule").Where("v0 = ?", "old").Order("id").Pluck("v1", &v1)
+	if len(v1) != 2 || v1[0] != "/api/v1/users/[^/]+" || v1[1] != "/api/v1/users" {
+		t.Fatalf("rules after upgrade = %v", v1)
+	}
+	_, login := h.do("POST", "/api/v1/auth/login", `{"username":"olduser","password":"old-user-pass-1"}`, "")
+	tok := login["token"].(string)
+	_, perms := h.do("GET", "/api/v1/auth/permissions", "", tok)
+	granted := map[string]bool{}
+	for _, k := range perms["granted"].([]any) {
+		granted[k.(string)] = true
+	}
+	if !granted["users:list"] || !granted["users:edit"] || granted["users:delete"] {
+		t.Fatalf("granted after upgrade = %v", granted)
+	}
+}
