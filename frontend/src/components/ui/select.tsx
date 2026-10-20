@@ -15,7 +15,10 @@ export interface SelectProps {
   options: SelectOption[]
   placeholder?: string
   disabled?: boolean
+  id?: string
   'aria-label'?: string
+  'aria-describedby'?: string
+  'aria-invalid'?: React.AriaAttributes['aria-invalid']
   /** Applied to the trigger, e.g. a fixed width. */
   className?: string
 }
@@ -33,7 +36,10 @@ const toOuter = (v: string) => (v === EMPTY ? '' : v)
 export const Select: React.FC<SelectProps> = ({ value, onValueChange, options, placeholder, disabled, className, ...rest }) => (
   <SelectPrimitive.Root value={toInner(value)} onValueChange={v => onValueChange(toOuter(v))} disabled={disabled}>
     <SelectPrimitive.Trigger
+      id={rest.id}
       aria-label={rest['aria-label']}
+      aria-describedby={rest['aria-describedby']}
+      aria-invalid={rest['aria-invalid']}
       className={cn(
         'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-gray-300 bg-white pl-3 pr-3 text-left text-sm',
         'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
