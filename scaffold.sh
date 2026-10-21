@@ -82,6 +82,7 @@ func main() {
 		log.Fatalf("embedded dist not found, run 'make build-frontend' first: %v", err)
 	}
 
+	// app.Run 遇启动错误会终止进程；需要自行处理错误时改用 app.RunE。
 	app.Run(app.Options{
 		EmbedFS: sub,
 		// 二开项目注入点：
@@ -131,7 +132,7 @@ FRONTEND_DIR = frontend
 FRONTEND_DIST_DIR = cmd/frontend/dist
 BINARY = ${PROJECT_NAME}
 
-.PHONY: all build dev-backend dev-frontend clean submodule
+.PHONY: all build build-frontend build-backend dev-backend dev-frontend clean submodule upgrade
 
 all: build
 
@@ -139,14 +140,12 @@ submodule:
 	git submodule update --init --recursive
 
 build-frontend:
-	cd \$(FRONTEND_DIR) && npm install && npm run build
-	rm -rf \$(FRONTEND_DIST_DIR)
+	cd \$(FRONTEND_DIR) && (npm ci || npm install) && npm run build
 	mkdir -p \$(FRONTEND_DIST_DIR)
+	find \$(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete
 	cp -r \$(FRONTEND_DIR)/dist/* \$(FRONTEND_DIST_DIR)/
 
 build-backend:
-	cd \$(BACKEND_DIR) && go mod tidy
-	go mod tidy
 	go build -o \$(BINARY) ./cmd
 
 build: build-frontend build-backend
@@ -154,14 +153,12 @@ build: build-frontend build-backend
 dev-backend:
 	go run ./cmd
 
-dev-backend-air:
-	cd \$(BACKEND_DIR) && air
-
 dev-frontend:
 	cd \$(FRONTEND_DIR) && npm run dev
 
 clean:
-	rm -rf \$(BINARY) \$(FRONTEND_DIR)/dist \$(FRONTEND_DIST_DIR)
+	rm -rf \$(BINARY)
+	find \$(FRONTEND_DIR)/dist \$(FRONTEND_DIST_DIR) -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
 
 # 升级底座
 upgrade:
@@ -192,8 +189,10 @@ cmd/frontend/dist/*
 # Dependencies
 frontend/node_modules/
 
-# Environment
+# Environment (config.yaml and the generated JWT signing key stay private)
 config.yaml
+data/jwt.secret
+*.secret
 
 # Logs / Uploads
 logs/
@@ -313,10 +312,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: process.env.VITE_HOST || '172.18.0.1',
+    host: process.env.VITE_HOST || '127.0.0.1',
     proxy: {
       '/api': {
-        target: 'http://172.18.0.1:19500',
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:19500',
         changeOrigin: true,
       },
     },
@@ -469,9 +468,8 @@ echo "  -> frontend/src/vite-env.d.ts"
 
 # —— .gitkeep ——
 touch "$FRONTEND_DIR/src/pages/.gitkeep"
-touch "$FRONTEND_DIR/dist/.gitkeep" 2>/dev/null || true
-mkdir -p "$FRONTEND_DIR/dist"
-touch "$FRONTEND_DIR/dist/.gitkeep"
+mkdir -p "$FRONTEND_DIR/dist" cmd/frontend/dist
+touch "$FRONTEND_DIR/dist/.gitkeep" cmd/frontend/dist/.gitkeep
 
 echo ""
 echo "======================================"
@@ -492,7 +490,8 @@ echo "  cd frontend && npm install  # 安装前端依赖"
 echo "  make build-frontend         # 构建前端"
 echo "  ./${PROJECT_NAME} serve     # 启动后端"
 echo ""
-echo "种子账号: admin / admin123"
+echo "首次启动会生成管理员 admin 的随机初始密码并在日志中打印一次（首次登录须修改）。"
+echo "jwt.secret 留空时首次启动会自动生成并保存到 data/jwt.secret；应用不输出任何 CORS 头（cors.origins 已废弃，由 nginx 处理）。"
 echo ""
 echo "升级底座: make upgrade"
 echo "======================================"

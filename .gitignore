@@ -1,8 +1,10 @@
 # Binary
 nx-admin
 
-# Database
+# Database and generated JWT signing key
 data/nx.db
+data/jwt.secret
+*.secret
 backend/data/
 
 # Frontend build

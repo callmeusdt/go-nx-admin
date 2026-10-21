@@ -6,12 +6,16 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/gofiber/fiber/v2"
+	"go-nx-admin/internal/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type policyFailureAdapter struct{ fail string }
@@ -61,15 +65,32 @@ m = r.sub == p.sub && regexMatch(r.obj, p.obj) && regexMatch(r.act, p.act)`)
 	return e, a
 }
 
-func putPolicies(t *testing.T, e *casbin.Enforcer, policies [][]string) (int, string) {
+func newPolicyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	body, err := json.Marshal(map[string]any{"policies": policies})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "roles.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.Role{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []models.Role{{Name: "Reader", Slug: "reader"}, {Name: "Root", Slug: "root", IsSystem: true}} {
+		if err := db.Create(&r).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
+}
+
+func putKeys(t *testing.T, e *casbin.Enforcer, slug string, keys []string) (int, string) {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"keys": keys})
 	if err != nil {
 		t.Fatal(err)
 	}
 	app := fiber.New()
-	app.Put("/roles/:slug/permissions", SaveRolePolicies(e))
-	req := httptest.NewRequest("PUT", "/roles/reader/permissions", bytes.NewReader(body))
+	app.Put("/roles/:slug/permissions", SaveRolePermissions(e, newPolicyTestDB(t)))
+	req := httptest.NewRequest("PUT", "/roles/"+slug+"/permissions", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := app.Test(req)
 	if err != nil {
@@ -83,43 +104,54 @@ func putPolicies(t *testing.T, e *casbin.Enforcer, policies [][]string) (int, st
 	return res.StatusCode, string(data)
 }
 
-func TestSaveRolePoliciesRejectsInvalidBeforeRemovingExisting(t *testing.T) {
-	for _, policies := range [][][]string{
-		{{strings.Repeat("x", 101), "GET"}}, {{"/x", strings.Repeat("x", 101)}},
-		{{"/x"}}, {{"/x", "GET", "extra"}}, {{"", "GET"}}, {{"/x", ""}},
-		{{"[", "GET"}}, {{"/x", "["}},
+func TestSaveRolePermissionsRejectsInvalidBeforeRemovingExisting(t *testing.T) {
+	for _, tc := range []struct {
+		slug string
+		keys []string
+		want int
+	}{
+		{"reader", []string{"nope:nope"}, 400},
+		{"reader", []string{"users:list", "nope:nope"}, 400},
+		{"root", []string{"users:list"}, 403},
+		{"ghost", []string{"users:list"}, 404},
 	} {
 		e, _ := newPolicyTestEnforcer(t)
-		code, _ := putPolicies(t, e, policies)
-		if code != 400 {
-			t.Errorf("invalid policy status=%d", code)
+		code, _ := putKeys(t, e, tc.slug, tc.keys)
+		if code != tc.want {
+			t.Errorf("slug=%s keys=%v status=%d want %d", tc.slug, tc.keys, code, tc.want)
 		}
 		if !e.HasPolicy("reader", "^/existing$", "^GET$") {
-			t.Error("invalid replacement removed existing grant")
+			t.Error("rejected replacement removed existing grant")
 		}
 	}
 }
 
-func TestSaveRolePoliciesReportsStorageFailure(t *testing.T) {
+func TestSaveRolePermissionsReportsStorageFailure(t *testing.T) {
 	e, adapter := newPolicyTestEnforcer(t)
 	adapter.fail = "replace"
-	code, body := putPolicies(t, e, [][]string{{"^/next$", "^GET$"}})
+	code, body := putKeys(t, e, "reader", []string{"users:list"})
 	if code != 500 {
 		t.Errorf("failed storage status=%d", code)
 	}
 	if strings.Contains(body, "private database detail") {
 		t.Error("storage details leaked")
 	}
-	if !e.HasPolicy("reader", "^/existing$", "^GET$") || e.HasPolicy("reader", "^/next$", "^GET$") {
+	if !e.HasPolicy("reader", "^/existing$", "^GET$") || len(e.GetFilteredPolicy(0, "reader")) != 1 {
 		t.Error("failed atomic replacement changed live authorization")
 	}
 }
 
-func TestSaveRolePoliciesReplacesValidPolicies(t *testing.T) {
+func TestSaveRolePermissionsReplacesValidPolicies(t *testing.T) {
 	e, _ := newPolicyTestEnforcer(t)
-	code, _ := putPolicies(t, e, [][]string{{"^/next$", "^GET$"}})
-	if code != 200 || !e.HasPolicy("reader", "^/next$", "^GET$") || e.HasPolicy("reader", "^/existing$", "^GET$") {
+	code, _ := putKeys(t, e, "reader", []string{"users:list"})
+	expanded := models.ExpandPermission("users:list")
+	if code != 200 || len(expanded) == 0 || e.HasPolicy("reader", "^/existing$", "^GET$") {
 		t.Fatal("valid replacement failed")
+	}
+	for _, p := range expanded {
+		if !e.HasPolicy("reader", p[1], p[0]) {
+			t.Errorf("expanded policy %v not stored as (path, method)", p)
+		}
 	}
 }
 
@@ -135,9 +167,9 @@ func (a *policyFailureAdapter) UpdateFilteredPolicies(string, string, [][]string
 	}
 	return [][]string{{"reader", "^/existing$", "^GET$"}}, nil
 }
-func TestSaveRolePoliciesCanClearGrants(t *testing.T) {
+func TestSaveRolePermissionsCanClearGrants(t *testing.T) {
 	e, _ := newPolicyTestEnforcer(t)
-	code, _ := putPolicies(t, e, [][]string{})
+	code, _ := putKeys(t, e, "reader", []string{})
 	if code != 200 || len(e.GetFilteredPolicy(0, "reader")) != 0 {
 		t.Fatal("explicit empty replacement failed")
 	}

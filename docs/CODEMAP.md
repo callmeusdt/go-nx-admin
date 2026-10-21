@@ -15,30 +15,35 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 ### 公开入口 `backend/app/`
 | 文件 | 内容 |
 |---|---|
-| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`;`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
-| `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期;`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
+| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`(`log.Fatal`)/`RunE`(返回 error,委托 `NewRuntime`,SIGINT/SIGTERM 关停并释放缓存、连接池、日志文件);`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
+| `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期,也是 `Run`/`RunE` 的 HTTP 栈(`errorHandler`、`/health`、日志、静态页只在此一处);`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
+| `secret.go` | `EnsureJWTSecret(path)`:给 `NewRuntime` 调用方的“生成一次并复用”密钥辅助 |
+| `sqlutil.go` | 公开 `ContainsFold`/`EscapeLike`(委托 `internal/dbutil`):大小写不敏感、转义 `%`/`_` 的包含筛选,三库一致 |
+| `database.go` | `OpenDatabase(cfg)`:`Run` 与 `reset-password` 共用的连库与连接池;SQLite 自动补 `_busy_timeout=5000`+WAL(`_pragma` 自管则不动),池上限 8(**不能设 1**:Casbin 适配器在事务内再用外层句柄会死锁) |
 | `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
 | `actor.go` | `CurrentActor(c)`：仅在底座认证和授权后的业务路由读取当前主体 `Actor{ID,Username,Role,RoleID}`；缺失、零 ID 或错误类型返回 `false`，不从请求输入取身份 |
+| `uploads.go` | `/uploads` 挂载与安全响应头;`RequiredDirs` 在 `app.go`,启动先建 data/logs/uploads/SQLite 与密钥文件父目录 |
 | `static.go` | 前端静态服务;每次请求重渲染 index.html 注入 `site.title`/favicon,`/_site/favicon` 提供本地 favicon;`assets/favicon.svg` 为内置牛图标 |
 | `*_test.go` | `bearer_test`/`browser_test`(Cookie+MFA)/`batch_test`/`password_test`(改密、强制改密、客户端 IP、仪表盘合并、`/auth/permissions`)/`media_test`/`static_test`/`runtime_*` |
 
 ### `backend/internal/`
 | 包 | 职责 |
 |---|---|
-| `config/config.go` | 配置结构与默认值、环境变量覆盖(`NX_*`);含 `server.trusted_proxies`/`client_ip_header`、`jwt.access_minutes/refresh_minutes/mfa_minutes`、`site`、`cache`、`upload.driver/s3` |
+| `config/config.go`、`config/validate.go` | 配置结构与默认值、环境变量覆盖(`NX_*`,格式错误返回 error);`Config.Validate()` 由 `Run` 与 `NewRuntime` 共用(JWT 密钥≥32 字节且非已发布默认);`Warnings()` 报告被忽略的废弃项(`cors.origins`);`config/secret.go` 的 `ResolveJWTSecret` 在配置/`NX_JWT_SECRET` 均未设置时自动生成并持久化到 `data/jwt.secret`(0600,不回写 config.yaml;**运维需备份该文件**,丢失则重新生成、所有登录失效);含 `server.trusted_proxies`/`client_ip_header`、`jwt.access_minutes/refresh_minutes/mfa_minutes`、`site`、`cache`、`upload.driver/s3` |
 | `cache/` | `Cache` 接口(Get/Set/GetDel/Del/Incr/TTL)、`ErrMiss`;`memory.go` 默认,`redis.go` 可选;`default.go` 为进程默认实例(`cache.Init`)。登录限流、验证码等共用 |
 | `storage/` | `Storage` 接口(Put/Open/Delete/URL);`local.go`、`s3.go`(minio-go,兼容 S3/MinIO/OSS/COS/R2);`registry.go` 按记录的 `Storage` 列路由,切换驱动后旧文件仍可读 |
 | `routes/routes.go` | 全部 `/api/v1` 路由;`api` 组统一挂 `JWTAuth` + `CasbinMiddleware`;`RegisterWithOptions` 支持 `disableMedia` |
-| `middleware/` | `jwt.go`(令牌,MFA 临时令牌 `PurposeMFA` 仅可访问 `/mfa/verify`)、`auth.go`(会话校验、`must_change_password` 路由白名单,否则 403 `PASSWORD_CHANGE_REQUIRED`)、`casbin.go`(授权;免权限路径白名单含 `/auth/password`、`/auth/permissions`)、`browser.go`(Cookie 会话/CSRF/重认证)、`ratelimit.go`、`clientip.go` |
+| `middleware/` | `jwt.go`(令牌,MFA 临时令牌 `PurposeMFA` 仅可访问 `/mfa/verify`)、`auth.go`(会话校验、`must_change_password` 路由白名单,否则 403 `PASSWORD_CHANGE_REQUIRED`)、`casbin.go`(授权;`anchoredMatch` 整串锚定匹配、`UpgradeWildcardPolicies` 迁移旧 `.*` 策略)、`routes.go`(免令牌/免权限路由的精确 `METHOD /path` 集合)、`browser.go`(Cookie 会话/CSRF/重认证)、`ratelimit.go`、`clientip.go` |
+| `middleware/audit.go` | 审计行的构造辅助:`auditStatus` 按错误处理器会给出的状态记录(handler 返回 error 时响应状态此刻仍是 200),`auditErrorText` 截到 255 字节并保持合法 UTF-8、去控制字符——MySQL/PG 对超长列直接拒写整行,会丢审计 |
 | `middleware/clientip.go` | **客户端 IP 唯一来源** `ClientIP`:对端不在 `trusted_proxies` 时忽略一切头;信任时按 `client_ip_header` 取值,XFF 从右向左跳过受信代理;Cookie 模式沿用 `X-BIM-Client-IP` |
-| `models/models.go` | 用户/角色/菜单/API/日志/在线用户模型与种子;`User.MustChangePassword`;种子管理员 `admin/qwer1234` 不强制改密(是否强制由使用者在用户表单自行开启) |
+| `models/models.go` | 用户/角色/菜单/API/日志/在线用户模型与种子;`User.MustChangePassword`;首次种子管理员 `admin` 随机初始密码(日志只打一次)并强制改密 |
 | `models/permissions.go` | 权限定义 `PermissionDefs` + `ExpandPermission`;`AllPermissionDefs`、`GetGrantedPermissionKeys` |
 | `models/session.go`、`media.go`、`config.go` | 浏览器会话、媒体(含 `Storage` 列)、系统配置 |
 
 ### `backend/internal/handlers/`
 | 文件 | 内容 |
 |---|---|
-| `auth.go` | 登录(密码→MFA 临时令牌→正式令牌)、`Me`、MFA、登出、IP 白名单检查 |
+| `auth.go` | 登录(先验密码再判状态,统一 401 并计限流)、`Me`、MFA(按用户限次、恢复码事务消费)、登出、IP 白名单检查(单 IP/CIDR) |
 | `refresh.go` | `POST /auth/refresh`:不透明 refresh token 原地轮换;10s 宽限(多标签竞态),宽限外重放则吊销会话 |
 | `crud.go` 的 `UpdateUser` | 用户名创建后不可变:更新接口忽略请求里的 `username`,前端编辑框为 `readOnly` |
 | `password.go` | `POST /auth/password`:旧密码(+MFA 开启时 TOTP)、`checkPasswordPolicy`(8–32 字节且不同于旧密码)、登录限流、**不踢会话**、成功后清 `must_change_password` |
@@ -47,7 +52,8 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `dashboard.go` | `GET /dashboard/stats`;`ExtraDashboardStats`(由 app 层注入)的返回键合并覆盖内置键,扩展 panic 被隔离不影响内置数字 |
 | `media.go` | 上传与媒体管理(走 storage 抽象) |
 | `browser_auth.go`、`browser_enrollment.go` | Cookie 模式登录与 MFA 注册 |
-| `captcha*.go`、`config.go` | 滑块验证码、系统配置 |
+| `errors.go` | `dbError`/`internalError`:handler 的统一出错出口,原因写日志、响应只回通用文案;唯一键/外键冲突回 409 |
+| `captcha*.go`、`config.go` | 滑块验证码(资源首次使用时懒加载,失败只让该请求 500,不再在包 `init()` 里终止进程)、系统配置 |
 
 ### 关键流程
 - **认证**:login → (mfa_required → `/mfa/verify`) → access 30min + refresh 7d → 到期前 `/auth/refresh`。

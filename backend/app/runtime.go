@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	fiberLog "github.com/gofiber/fiber/v2/middleware/logger"
 	fiberRecover "github.com/gofiber/fiber/v2/middleware/recover"
 	"gorm.io/gorm"
@@ -92,27 +92,15 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	if opts.DB == nil {
 		return nil, errors.New("app: database is required")
 	}
-	if opts.Config.Server.Host == "" || opts.Config.Server.Port < 1 || opts.Config.Server.Port > 65535 {
-		return nil, errors.New("app: explicit host and valid port are required")
-	}
-	if len(opts.Config.JWT.Secret) < 32 {
-		return nil, errors.New("app: JWT secret must contain at least 32 bytes")
-	}
-	if opts.Config.CORS.Origins == "" || strings.Contains(opts.Config.CORS.Origins, "*") {
-		return nil, errors.New("app: explicit CORS origins are required")
-	}
-	for _, origin := range strings.Split(opts.Config.CORS.Origins, ",") {
-		u, err := url.Parse(strings.TrimSpace(origin))
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return nil, errors.New("app: invalid CORS origin")
-		}
+	if err := opts.Config.Validate(); err != nil {
+		return nil, fmt.Errorf("app: %w", err)
 	}
 	if opts.PublicUploads && (opts.DisableMedia || opts.Config.Upload.Dir == "") {
 		return nil, errors.New("app: public uploads require media and an explicit directory")
 	}
 	if opts.Config.Session.Cookie {
 		u, err := url.Parse(opts.Config.Session.Origin)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || opts.Config.CORS.Origins != opts.Config.Session.Origin {
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 			return nil, errors.New("app: cookie sessions require one exact HTTPS origin")
 		}
 	}
@@ -138,15 +126,8 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 			result, resultErr = nil, errors.New("app: runtime construction failed")
 		}
 	}()
-	r.App = fiber.New(fiber.Config{DisableStartupMessage: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			status := fiber.StatusInternalServerError
-			var fe *fiber.Error
-			if errors.As(err, &fe) {
-				status = fe.Code
-			}
-			return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
-		}})
+	r.App = fiber.New(fiber.Config{DisableStartupMessage: true, CaseSensitive: true, StrictRouting: true,
+		BodyLimit: bodyLimit(opts), ErrorHandler: errorHandler})
 	config.AppConfig = &opts.Config
 	if opts.Cache != nil {
 		r.previousCache = cache.Set(opts.Cache)
@@ -179,18 +160,17 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 	models.ExtraPermissionExpand = opts.Extensions.ExtraPermissionExpand
 	handlers.ExtraDashboardStats = opts.Extensions.DashboardStats
 	r.App.Use(fiberRecover.New())
-	r.App.Use(cors.New(cors.Config{AllowOrigins: opts.Config.CORS.Origins, AllowCredentials: opts.Config.Session.Cookie, AllowHeaders: "Content-Type,Authorization,X-CSRF-Token"}))
-	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "${status} ${method} ${path}\n"}))
+	r.App.Use(fiberLog.New(fiberLog.Config{Output: output, Format: "[${time}] ${status} - ${latency} ${method} ${path}\n"}))
 	r.App.Get("/health", func(c *fiber.Ctx) error {
 		db, err := opts.DB.DB()
 		if err != nil || db.PingContext(c.UserContext()) != nil {
-			return c.Status(503).JSON(fiber.Map{"status": "unavailable"})
+			return c.Status(503).JSON(fiber.Map{"status": "unavailable", "db": "disconnected"})
 		}
-		return c.JSON(fiber.Map{"status": "ok"})
+		return c.JSON(fiber.Map{"status": "ok", "db": "connected"})
 	})
 	routes.RegisterWithOptions(r.App, opts.DB, enforcer, opts.Extensions.ExtraRoutes, opts.DisableMedia)
 	if opts.PublicUploads {
-		r.App.Static("/uploads", opts.Config.Upload.Dir)
+		serveUploads(r.App, opts.Config.Upload.Dir)
 	}
 	r.App.Use(func(c *fiber.Ctx) error {
 		p := c.Path()
@@ -276,5 +256,38 @@ func MigrateSchema(db *gorm.DB, extraModels ...interface{}) error {
 	if err := db.Table("admin_casbin_rule").AutoMigrate(&gormadapter.CasbinRule{}); err != nil {
 		return err
 	}
-	return middleware.NormalizeLegacyPolicies(db)
+	if err := middleware.NormalizeLegacyPolicies(db); err != nil {
+		return err
+	}
+	return middleware.UpgradeWildcardPolicies(db)
+}
+
+// errorHandler answers every failure with a generic status message. The cause
+// of a 5xx may contain SQL, file paths or driver text, so it is logged and
+// never returned.
+func errorHandler(c *fiber.Ctx, err error) error {
+	status := fiber.StatusInternalServerError
+	var fe *fiber.Error
+	if errors.As(err, &fe) {
+		status = fe.Code
+	}
+	if status >= 500 {
+		log.Printf("%s %s: %v", c.Method(), c.Path(), err)
+	}
+	return c.Status(status).JSON(fiber.Map{"message": http.StatusText(status)})
+}
+
+// bodyLimit lets a request carry a full upload plus multipart framing. Fiber's
+// 4 MiB default would reject any upload the configuration allows beyond that
+// before the handler could apply its own, clearer limit.
+func bodyLimit(opts RuntimeOptions) int {
+	const floor, framing = 4 << 20, 1 << 20
+	if opts.DisableMedia || opts.Config.Upload.MaxSize <= 0 {
+		return floor
+	}
+	limit := opts.Config.Upload.MaxSize + framing
+	if limit < floor || limit > int64(^uint(0)>>1) {
+		return floor
+	}
+	return int(limit)
 }

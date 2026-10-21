@@ -1,5 +1,5 @@
 server:
-  host: 172.18.0.1
+  host: 127.0.0.1                # use 0.0.0.0 to listen on all interfaces behind a proxy
   port: 19500
   # Client address behind a reverse proxy (Cloudflare -> nginx -> nxadmin).
   # Headers are read only when the TCP peer is in trusted_proxies, and only the
@@ -20,7 +20,12 @@ database:
   # postgres: host=localhost user=postgres password=xxx dbname=nxadmin port=5432 sslmode=disable
 
 jwt:
-  secret: nx-admin-jwt-secret-2024
+  # Leave empty (recommended): a random key is generated on first start and kept
+  # in secret_file, so restarts keep sessions valid. Set it (>= 32 bytes, e.g.
+  # `openssl rand -hex 32`, or NX_JWT_SECRET) to share one key across instances.
+  # A short or published-default value is rejected / ignored.
+  secret: ""
+  secret_file: data/jwt.secret   # keep this file private (created with mode 0600)
   access_minutes: 30             # access token lifetime
   refresh_minutes: 10080         # refresh token lifetime (7 days)
   mfa_minutes: 5                 # interim token between password and MFA code
@@ -29,11 +34,14 @@ site:
   title: ""                      # browser tab title; empty -> 信息管理系统
   favicon: ""                    # http(s)/data URL or local file path; empty -> built-in bull icon
 
+# Deprecated and ignored. The application never sends Access-Control-* headers:
+# configure CORS in the reverse proxy (nginx), otherwise two layers produce
+# duplicated values such as "*, *" that browsers reject. Kept so old files parse.
 cors:
-  origins: "*"
+  origins: ""
 
 # Strict cookie/MFA mode is only supported by app.NewRuntime, with explicit
-# migration/bootstrap and one HTTPS session.origin equal to cors.origins.
+# migration/bootstrap and one HTTPS session.origin.
 # Legacy serve/Run keeps Bearer mode and rejects cookie: true before any writes.
 session:
   cookie: false
@@ -51,6 +59,10 @@ login:
 upload:
   dir: ./uploads
   max_size: 10485760
+  # Permitted extensions (default: common images, documents, archives, audio/video).
+  # html/svg/js and other active formats are always refused. Content is sniffed,
+  # so a renamed file is rejected too.
+  # allow_types: [jpg, png, pdf]
   driver: local                  # local / s3 (AWS S3, MinIO, Aliyun OSS, Tencent COS, R2)
   # Files already uploaded stay reachable after switching drivers; each record
   # remembers which driver holds it.

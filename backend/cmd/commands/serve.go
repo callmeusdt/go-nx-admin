@@ -8,7 +8,7 @@ import (
 func ServeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
-		Short: "启动 HTTP 服务（监听端口，默认 0.0.0.0:19500）",
+		Short: "启动 HTTP 服务（监听端口，默认 127.0.0.1:19500）",
 		Run:   runServe,
 	}
 }

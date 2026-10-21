@@ -79,17 +79,17 @@ func ExpandPermission(key string) [][]string {
 	case "users:create":
 		return [][]string{{"POST", "/api/v1/users"}}
 	case "users:edit":
-		return [][]string{{"PUT", "/api/v1/users/.*"}}
+		return [][]string{{"PUT", "/api/v1/users/[^/]+"}}
 	case "users:delete":
-		return [][]string{{"DELETE", "/api/v1/users/.*"}, {"DELETE", "/api/v1/users"}}
+		return [][]string{{"DELETE", "/api/v1/users/[^/]+"}, {"DELETE", "/api/v1/users"}}
 	case "users:mfa":
-		return [][]string{{"DELETE", "/api/v1/users/.*/mfa"}}
+		return [][]string{{"DELETE", "/api/v1/users/[^/]+/mfa"}}
 	case "users:whitelist":
 		return [][]string{
-			{"GET", "/api/v1/users/.*/ip-whitelists"},
-			{"POST", "/api/v1/users/.*/ip-whitelists"},
-			{"PUT", "/api/v1/users/.*/ip-whitelists/.*"},
-			{"DELETE", "/api/v1/users/.*/ip-whitelists/.*"},
+			{"GET", "/api/v1/users/[^/]+/ip-whitelists"},
+			{"POST", "/api/v1/users/[^/]+/ip-whitelists"},
+			{"PUT", "/api/v1/users/[^/]+/ip-whitelists/[^/]+"},
+			{"DELETE", "/api/v1/users/[^/]+/ip-whitelists/[^/]+"},
 		}
 
 	// 角色管理
@@ -98,20 +98,19 @@ func ExpandPermission(key string) [][]string {
 	case "roles:create":
 		return [][]string{{"POST", "/api/v1/roles"}}
 	case "roles:edit":
-		return [][]string{{"PUT", "/api/v1/roles/.*"}}
+		return [][]string{{"PUT", "/api/v1/roles/[^/]+"}}
 	case "roles:delete":
-		return [][]string{{"DELETE", "/api/v1/roles/.*"}, {"DELETE", "/api/v1/roles"}}
+		return [][]string{{"DELETE", "/api/v1/roles/[^/]+"}, {"DELETE", "/api/v1/roles"}}
 	case "roles:menus":
 		return [][]string{
-			{"GET", "/api/v1/roles/.*/menus"},
-			{"PUT", "/api/v1/roles/.*/menus"},
+			{"GET", "/api/v1/roles/[^/]+/menus"},
+			{"PUT", "/api/v1/roles/[^/]+/menus"},
 		}
 	case "roles:permissions":
 		return [][]string{
-			{"GET", "/api/v1/roles/.*/policies"},
-			{"PUT", "/api/v1/roles/.*/policies"},
-			{"GET", "/api/v1/roles/.*/permissions"},
-			{"PUT", "/api/v1/roles/.*/permissions"},
+			{"GET", "/api/v1/roles/[^/]+/policies"},
+			{"GET", "/api/v1/roles/[^/]+/permissions"},
+			{"PUT", "/api/v1/roles/[^/]+/permissions"},
 		}
 
 	// 菜单管理
@@ -120,9 +119,9 @@ func ExpandPermission(key string) [][]string {
 	case "menus:create":
 		return [][]string{{"POST", "/api/v1/menus"}}
 	case "menus:edit":
-		return [][]string{{"PUT", "/api/v1/menus/.*"}}
+		return [][]string{{"PUT", "/api/v1/menus/[^/]+"}}
 	case "menus:delete":
-		return [][]string{{"DELETE", "/api/v1/menus/.*"}}
+		return [][]string{{"DELETE", "/api/v1/menus/[^/]+"}}
 
 	// 接口管理
 	case "apis:list":
@@ -130,9 +129,9 @@ func ExpandPermission(key string) [][]string {
 	case "apis:create":
 		return [][]string{{"POST", "/api/v1/apis"}}
 	case "apis:edit":
-		return [][]string{{"PUT", "/api/v1/apis/.*"}}
+		return [][]string{{"PUT", "/api/v1/apis/[^/]+"}}
 	case "apis:delete":
-		return [][]string{{"DELETE", "/api/v1/apis/.*"}, {"DELETE", "/api/v1/apis"}}
+		return [][]string{{"DELETE", "/api/v1/apis/[^/]+"}, {"DELETE", "/api/v1/apis"}}
 
 	// 日志审计
 	case "audit:view":
@@ -144,7 +143,7 @@ func ExpandPermission(key string) [][]string {
 	case "online:list":
 		return [][]string{{"GET", "/api/v1/online-users"}}
 	case "online:kick":
-		return [][]string{{"DELETE", "/api/v1/online-users/.*"}}
+		return [][]string{{"DELETE", "/api/v1/online-users/[^/]+"}}
 
 	// 媒体管理
 	case "media:list":
@@ -152,7 +151,7 @@ func ExpandPermission(key string) [][]string {
 	case "media:upload":
 		return [][]string{{"POST", "/api/v1/media/upload"}}
 	case "media:delete":
-		return [][]string{{"DELETE", "/api/v1/media/.*"}, {"DELETE", "/api/v1/media"}}
+		return [][]string{{"DELETE", "/api/v1/media/[^/]+"}, {"DELETE", "/api/v1/media"}}
 
 	// 系统配置
 	case "config:view":
@@ -212,30 +211,18 @@ func GetGrantedPermissionKeys(rawPolicies [][]string) []string {
 	return keys
 }
 
-func PermissionGroups() []string {
-	seen := map[string]bool{}
-	var groups []string
-	for _, rd := range AllPermissionDefs() {
-		if !seen[rd.Group] {
-			seen[rd.Group] = true
-			groups = append(groups, rd.Group)
-		}
-	}
-	return groups
-}
-
-func PermissionsByGroup() map[string][]PermissionDef {
-	m := map[string][]PermissionDef{}
-	for _, rd := range AllPermissionDefs() {
-		m[rd.Group] = append(m[rd.Group], rd)
-	}
-	return m
-}
-
+// policyMatch reports whether a stored policy pattern covers a path from a
+// permission expansion. The wildcard "^.*$" style grant of the admin role is
+// handled by callers; everything else must be the same pattern.
 func policyMatch(pattern, target string) bool {
-	if !strings.Contains(pattern, ".*") {
-		return pattern == target
+	return pattern == target || pattern == ".*"
+}
+
+// LegacyWildcardPolicy upgrades a pattern written when "/x/.*" was meant as a
+// single path segment, which is what the permission editor intended.
+func LegacyWildcardPolicy(pattern string) string {
+	if pattern == ".*" || !strings.HasPrefix(pattern, "/api/") || !strings.Contains(pattern, ".*") {
+		return pattern
 	}
-	prefix := strings.TrimSuffix(pattern, ".*")
-	return strings.HasPrefix(target, prefix)
+	return strings.ReplaceAll(pattern, ".*", "[^/]+")
 }

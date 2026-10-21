@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"path/filepath"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -56,18 +56,27 @@ func UploadMedia(db *gorm.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"message": "file too large"})
 		}
 
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		now := time.Now()
-		newName := uuid.New().String() + ext
-		key := fmt.Sprintf("uploads/%s/%s/%s/%s", now.Format("2006"), now.Format("01"), now.Format("02"), newName)
-
 		src, err := file.Open()
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "cannot open uploaded file"})
 		}
 		defer src.Close()
 
-		mimeType := file.Header.Get("Content-Type")
+		head := make([]byte, 512)
+		n, _ := io.ReadFull(src, head)
+		ext, mimeType, ok := checkUpload(file.Filename, head[:n])
+		if !ok {
+			return c.Status(400).JSON(fiber.Map{"message": "file type not allowed"})
+		}
+		if _, err := src.Seek(0, io.SeekStart); err != nil {
+			return c.Status(500).JSON(fiber.Map{"message": "cannot read uploaded file"})
+		}
+
+		ext = "." + ext
+		now := time.Now()
+		newName := uuid.New().String() + ext
+		key := fmt.Sprintf("uploads/%s/%s/%s/%s", now.Format("2006"), now.Format("01"), now.Format("02"), newName)
+
 		drv := reg.Active()
 		if err := drv.Put(c.UserContext(), key, src, file.Size, mimeType); err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "write file error"})
@@ -116,8 +125,7 @@ func ListMedia(db *gorm.DB) fiber.Handler {
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "storage unavailable"})
 		}
-		page, _ := strconv.Atoi(c.Query("page", "1"))
-		pageSize, _ := strconv.Atoi(c.Query("page_size", "20"))
+		page, pageSize, offset := pagination(c)
 		mediaType := c.Query("type", "")
 
 		query := db.Model(&models.Media{})
@@ -126,10 +134,14 @@ func ListMedia(db *gorm.DB) fiber.Handler {
 		}
 
 		var total int64
-		query.Count(&total)
+		if err := query.Count(&total).Error; err != nil {
+			return dbError(c, err)
+		}
 
 		var items []models.Media
-		query.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+		if err := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
+			return dbError(c, err)
+		}
 		for i := range items {
 			items[i] = withURL(c, reg, items[i])
 		}
@@ -156,7 +168,7 @@ func DeleteMedia(db *gorm.DB) fiber.Handler {
 		}
 		drv, err := reg.For(media.Storage)
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"message": err.Error()})
+			return internalError(c, err)
 		}
 		// Remove the object first: if that fails the record stays, so the file
 		// is never orphaned and the delete can be retried.

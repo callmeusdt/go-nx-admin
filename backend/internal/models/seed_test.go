@@ -31,8 +31,11 @@ func TestSeedCreatesDefaultAdminWithoutMFA(t *testing.T) {
 	if user.MFAEnabled {
 		t.Fatal("default admin MFA is enabled")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("qwer1234")); err != nil {
-		t.Fatal("default admin password does not match qwer1234")
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("qwer1234")) == nil {
+		t.Fatal("default admin still uses the published password")
+	}
+	if !user.MustChangePassword {
+		t.Fatal("default admin must change the initial password")
 	}
 
 	var users int64
@@ -51,5 +54,54 @@ func TestSeedCreatesDefaultAdminWithoutMFA(t *testing.T) {
 	}
 	if users != 1 {
 		t.Fatalf("repeat seed created %d users, want 1", users)
+	}
+}
+
+// A legacy unique index on user_id (one session per user) is dropped on
+// upgrade; the current plain index of the same name must be left alone.
+func TestLegacyOnlineUserIndexIsReplacedOnlyWhenUnique(t *testing.T) {
+	const name = "idx_admin_online_users_user_id"
+	uniqueOf := func(db *gorm.DB) (found, unique bool) {
+		idxs, err := db.Migrator().GetIndexes(&OnlineUser{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, i := range idxs {
+			if i.Name() == name {
+				u, _ := i.Unique()
+				return true, u
+			}
+		}
+		return false, false
+	}
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := AutoMigrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if found, unique := uniqueOf(db); !found || unique {
+		t.Fatalf("fresh schema: found=%v unique=%v, want a plain index", found, unique)
+	}
+	if err := AutoMigrate(db); err != nil {
+		t.Fatalf("second migrate: %v", err)
+	}
+	if found, _ := uniqueOf(db); !found {
+		t.Fatal("the plain index was dropped by a re-run")
+	}
+
+	// Simulate the old schema.
+	if err := db.Exec("DROP INDEX " + name).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE UNIQUE INDEX " + name + " ON admin_online_users(user_id)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := AutoMigrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if found, unique := uniqueOf(db); !found || unique {
+		t.Fatalf("after upgrade: found=%v unique=%v, want the unique index replaced by a plain one", found, unique)
 	}
 }
