@@ -76,6 +76,7 @@ export const ApisPage: React.FC = () => {
       <BatchSummary text={batch.summary} />
       <DataTable<ApiItem>
         storageKey="apis"
+        fixedRight={1}
         rows={items}
         rowKey={i => i.id}
         loading={loading}

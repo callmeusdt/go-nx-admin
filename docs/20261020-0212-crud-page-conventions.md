@@ -72,12 +72,33 @@
 
 - 列定义用 `DataTableColumn`:`title` 是表头,`label` 是列设置里显示的纯文本,`required: true` 的列(通常是"操作")不可被隐藏。
 - 给每张表一个稳定的 `storageKey`,列设置选择会存到本地。
+- 固定列:宽表用 `fixedLeft={n}` 固定前 n 列、`fixedRight={n}` 固定后 n 列,横向滚动时它们停在表格两侧,其余列从下面滚过。详见 1.4.1。
 - 行内状态一律 `Badge`:启用 `success`、禁用 `danger`、分类 `info`、系统内置 `warning`、其他 `neutral`;在线状态用 `shape="pill"`。
 - 行内操作用 `IconButton`,传 `label`(悬浮提示和无障碍名称)和 `tone`:编辑 `primary`、删除 `danger`、授权类 `success`/`primary`、其他默认。
 - 不可执行的操作保持显示并 `disabled`,提示文字说明原因(如"不能删除当前登录账户"),不要隐藏。
 - 空数据传 `emptyText`,默认文案 `common.no_data`。
 - 树形数据(如菜单)用同一个 `DataTable`,缩进放在名称列的 `render` 里,不另写 `<table>`。
 - 弹窗里的小列表(在线会话、IP 白名单)用 `SimpleTable*`,不用 `DataTable`。
+
+#### 1.4.1 固定列
+
+```tsx
+<DataTable
+  storageKey="orders"
+  selectable
+  fixedLeft={2}   // 前 2 个数据列(如 ID、名称)
+  fixedRight={1}  // 最后 1 列(操作列)
+  minWidth={900}
+  columns={[...]}
+/>
+```
+
+- 计数针对**当前可见的数据列**,不含选择框列;`selectable` 时选择框列自动随左侧固定,不用算进 `fixedLeft`。列设置里隐藏某列后,固定数量按剩余可见列重新计算,所以被固定的列通常应是不可隐藏的(`required`)或默认必显的列。
+- 两个数值都是可选的,默认不固定。传 0、负数或超过列数时按边界处理;左右固定不会重叠同一列。
+- 含操作列的表默认 `fixedRight={1}`,操作按钮在窄屏和长表里始终可点。身份列(ID、名称、用户名)放在前面,需要时用 `fixedLeft`。
+- 固定列越多,可滚动区域越小。固定列总宽度不要超过表格可视宽度的一半;窄屏(约 600px)下左侧最多固定 2 列。
+- 固定列自带不透明背景和边缘阴影,页面不要给它的 `className` 再设背景色(会盖掉悬停和选中态),也不要自己写 `position: sticky`。
+- 只在表格需要横向滚动时才有意义;`minWidth` 不大于容器宽度时,固定列看不出区别。
 
 ### 1.5 分页
 
@@ -221,7 +242,7 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 
 - [ ] 页头用 `PageHeader`,没有自己写 `h2`。
 - [ ] 搜索区用 `FilterBar`,筛选在后端完成,"查询/重置/回车"都能用。
-- [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`。
+- [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`;有操作列的表设 `fixedRight={1}`,列多的表按需设 `fixedLeft`。
 - [ ] 行内状态用 `Badge`,图标按钮用 `IconButton` 带 `label`。
 - [ ] 批量操作走 `useBatch`,不可操作的行用 `isRowDisabled`。
 - [ ] 新建/编辑表单用 `FormField`,布尔值用 `Switch`,下拉用 `Select`,勾选用 `Checkbox`。
@@ -233,15 +254,15 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 
 ## 6. 现有页面对照
 
-| 页面 | 搜索区 | 批量 | 分页 | 编辑方式 |
-|---|---|---|---|---|
-| `users` | 用户名、角色 | 启用/禁用/删除 | 前端不分页(接口返回全部,支持筛选参数) | 弹窗 |
-| `roles` | 无 | 删除 | 无 | 弹窗 + 授权弹窗 |
-| `menus` | 无 | 无 | 无 | 弹窗(树形 `DataTable`) |
-| `apis` | 内联新增表单 | 删除 | 无 | 行内表单 |
-| `audit-logs` | 操作人、路径、方法、IP、起止时间 | 无 | 服务端 | 只读 |
-| `login-logs` | 用户名、状态、IP、起止时间 | 无 | 服务端 | 只读 |
-| `media` | 分类 Tabs | 删除 | 前端页码 | 上传 + 确认 |
-| `system-config` | 无 | 无 | 无 | 整页表单 |
+| 页面 | 搜索区 | 批量 | 分页 | 编辑方式 | 固定列 |
+|---|---|---|---|---|---|
+| `users` | 用户名、角色 | 启用/禁用/删除 | 前端不分页(接口返回全部,支持筛选参数) | 弹窗 | 左 2 + 右 1 |
+| `roles` | 无 | 删除 | 无 | 弹窗 + 授权弹窗 | 右 1 |
+| `menus` | 无 | 无 | 无 | 弹窗(树形 `DataTable`) | 右 1 |
+| `apis` | 内联新增表单 | 删除 | 无 | 行内表单 | 右 1 |
+| `audit-logs` | 操作人、路径、方法、IP、起止时间 | 无 | 服务端 | 只读 | 无 |
+| `login-logs` | 用户名、状态、IP、起止时间 | 无 | 服务端 | 只读 | 无 |
+| `media` | 分类 Tabs | 删除 | 前端页码 | 上传 + 确认 | 无 |
+| `system-config` | 无 | 无 | 无 | 整页表单 | 无 |
 
 `system-config` 是现有唯一的整页表单:`PageHeader` + 保存按钮在右上、分组卡片、`FormField`。做独立编辑页时可参考它的卡片分区,但保存操作条按 3.2 放在底部。

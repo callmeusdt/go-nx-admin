@@ -145,6 +145,7 @@ export const MenusPage: React.FC = () => {
 
       <DataTable<Menu & { depth: number }>
         storageKey="menus"
+        fixedRight={1}
         rows={visibleFlat}
         rowKey={m => m.id}
         minWidth={720}
