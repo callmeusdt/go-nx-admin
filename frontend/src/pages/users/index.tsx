@@ -205,8 +205,8 @@ export const UsersPage: React.FC = () => {
       <BatchSummary text={batch.summary} />
       <DataTable<User>
         storageKey="users"
-        fixedLeft={2}
-        fixedRight={1}
+        stickyStart={2}
+        stickyEnd={1}
         rows={users}
         rowKey={u => u.id}
         minWidth={900}

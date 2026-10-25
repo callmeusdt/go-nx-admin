@@ -51,14 +51,14 @@ export interface DataTableProps<T> {
   batchActions?: (ctx: { selectedKeys: Array<string | number>; selectedRows: T[]; clear: () => void }) => React.ReactNode
 
   /**
-   * Pins the first N visible data columns to the left edge while the table
-   * scrolls horizontally. The selection checkbox column, when present, is
-   * pinned together with them. Counts follow the column picker: a hidden
-   * column no longer takes a pinned slot.
+   * Makes the first N visible data columns stick to the start (left) edge while the table
+   * scrolls horizontally. The selection checkbox column, when present, sticks
+   * together with them. Counts follow the column picker: a hidden
+   * column no longer takes a sticky slot.
    */
-  fixedLeft?: number
-  /** Pins the last N visible data columns to the right edge (e.g. 1 for the actions column). */
-  fixedRight?: number
+  stickyStart?: number
+  /** Makes the last N visible data columns stick to the end (right) edge (e.g. 1 for the actions column). */
+  stickyEnd?: number
 
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
@@ -91,7 +91,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     page = 1, pageSize = 20, total, onPageChange,
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
-    fixedLeft, fixedRight,
+    stickyStart, stickyEnd,
     storageKey, toolbar,
   } = props
   const { t } = useI18n()
@@ -135,9 +135,9 @@ export function DataTable<T>(props: DataTableProps<T>) {
     else onSortChange(null)
   }
 
-  const nLeft = clampCount(fixedLeft, visible.length)
-  const nRight = clampCount(fixedRight, visible.length - nLeft)
-  const pinned = nLeft + nRight > 0
+  const nStart = clampCount(stickyStart, visible.length)
+  const nEnd = clampCount(stickyEnd, visible.length - nStart)
+  const pinned = nStart + nEnd > 0
 
   // Sticky offsets depend on the rendered width of every column before (left)
   // or after (right) the cell, so the header cells are measured.
@@ -173,12 +173,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const cellCount = visible.length + (selectable ? 1 : 0)
   const pinInfo = (ci: number): PinInfo | null => {
     if (!pinned || widths.length !== cellCount) return null
-    const leftCells = nLeft > 0 ? nLeft + (selectable ? 1 : 0) : 0
+    const leftCells = nStart > 0 ? nStart + (selectable ? 1 : 0) : 0
     if (ci < leftCells) {
       return { side: 'left', offset: widths.slice(0, ci).reduce((a, b) => a + b, 0), edge: ci === leftCells - 1 }
     }
-    if (nRight > 0 && ci >= cellCount - nRight) {
-      return { side: 'right', offset: widths.slice(ci + 1).reduce((a, b) => a + b, 0), edge: ci === cellCount - nRight }
+    if (nEnd > 0 && ci >= cellCount - nEnd) {
+      return { side: 'right', offset: widths.slice(ci + 1).reduce((a, b) => a + b, 0), edge: ci === cellCount - nEnd }
     }
     return null
   }

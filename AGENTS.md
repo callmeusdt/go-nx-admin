@@ -64,7 +64,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - CRUD 标题左、工具右；筛选用白色卡片，重置/查询靠右；分页左侧总数、右侧页码。日志必须后端分页筛选，禁止固定最近 N 条。列表页六区、弹窗与独立页的新建/编辑、删除确认、检查清单见 `docs/20261020-0212-crud-page-conventions.md`，新增 CRUD 页前先读。
 - 日期时间统一用 `frontend/src/components/ui/datetime-input.tsx` 的 `DateTimeInput`；flatpickr 全局样式及 Tailwind 污染回退沿用现有入口，不在页面重复实现。
 - 基座要保持视觉统一：页面和弹窗只用 `frontend/src/components/ui/` 的公共组件，不再手写原生 `<select>`、`<input type=checkbox>`、`window.confirm`、行内错误 `<p>`、状态标签 `<span>`。对应关系：`Select`、`Checkbox`、`ConfirmDialog`、`Alert`、`Badge`；表单行 `FormField`，筛选区 `FilterBar`/`FilterField`，页头 `PageHeader`，行内图标按钮 `IconButton`，小表格 `SimpleTable*`，列表 `DataTable`，加载/空/骨架 `Spinner`/`EmptyState`/`Skeleton`，轻提示 `useToast`，悬浮提示 `Tooltip`，单选 `RadioGroup`，页内标签 `Tabs`。缺组件时先在 `ui/` 加封装再用，不在页面里临时拼样式。
-- 布尔字段用 `Switch`（开关在左，label+说明在右）；列设置在 `DataTable` 表头末列，批量操作条在表格卡片内，页面不再单独放“列设置”工具栏。宽表用 `DataTable` 的 `fixedLeft`/`fixedRight` 固定前/后几列（含操作列的表默认 `fixedRight={1}`），不自己写 sticky。
+- 布尔字段用 `Switch`（开关在左，label+说明在右）；列设置在 `DataTable` 表头末列，批量操作条在表格卡片内，页面不再单独放“列设置”工具栏。宽表用 `DataTable` 的 `stickyStart`/`stickyEnd` 让前/后几列粘住两侧（含操作列的表默认 `stickyEnd={1}`），不自己写 sticky。
 - 不恢复暗黑皮肤：无 `dark:` 类、ThemeProvider 或切换入口。
 - 在线详情用弹窗表格，不在主表格内展开。
 
