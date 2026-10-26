@@ -195,6 +195,7 @@ export const RolesPage: React.FC = () => {
       <BatchSummary text={batch.summary} />
       <DataTable<Role>
         storageKey="roles"
+        stickyEnd={1}
         rows={roles}
         rowKey={r => r.id}
         selectable

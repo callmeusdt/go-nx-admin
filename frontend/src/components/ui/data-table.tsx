@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Loader2 } from 'lucide-react'
 import { useI18n } from '../../contexts/i18n-context'
 import { Button } from './button'
@@ -50,10 +50,29 @@ export interface DataTableProps<T> {
   /** Rendered in the toolbar while at least one row is selected. */
   batchActions?: (ctx: { selectedKeys: Array<string | number>; selectedRows: T[]; clear: () => void }) => React.ReactNode
 
+  /**
+   * Makes the first N visible data columns stick to the start (left) edge while the table
+   * scrolls horizontally. The selection checkbox column, when present, sticks
+   * together with them. Counts follow the column picker: a hidden
+   * column no longer takes a sticky slot.
+   */
+  stickyStart?: number
+  /** Makes the last N visible data columns stick to the end (right) edge (e.g. 1 for the actions column). */
+  stickyEnd?: number
+
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
   toolbar?: React.ReactNode
 }
+
+interface PinInfo { side: 'left' | 'right'; offset: number; edge: boolean }
+
+const clampCount = (n: number | undefined, max: number) => Math.max(0, Math.min(Math.floor(n ?? 0) || 0, max))
+
+// Sticky cells need an opaque background or the cells scrolling underneath show
+// through. These match the row states: default, hover, and selected.
+const PIN_BG = 'bg-white group-hover:bg-gray-50'
+const PIN_BG_SELECTED = 'bg-[#f9fbff] group-hover:bg-gray-50'
 
 function readHidden(storageKey?: string): string[] | null {
   if (!storageKey) return null
@@ -72,6 +91,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     page = 1, pageSize = 20, total, onPageChange,
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
+    stickyStart, stickyEnd,
     storageKey, toolbar,
   } = props
   const { t } = useI18n()
@@ -114,6 +134,62 @@ export function DataTable<T>(props: DataTableProps<T>) {
     else if (sort.order === 'asc') onSortChange({ field, order: 'desc' })
     else onSortChange(null)
   }
+
+  const nStart = clampCount(stickyStart, visible.length)
+  const nEnd = clampCount(stickyEnd, visible.length - nStart)
+  const pinned = nStart + nEnd > 0
+
+  // Sticky offsets depend on the rendered width of every column before (left)
+  // or after (right) the cell, so the header cells are measured.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [widths, setWidths] = useState<number[]>([])
+  const [scrolled, setScrolled] = useState({ left: false, right: false })
+
+  const measure = useCallback(() => {
+    const table = tableRef.current
+    const box = scrollRef.current
+    if (!table || !box) return
+    const cells = Array.from(table.tHead?.rows[0]?.cells ?? [])
+    const next = cells.map(c => c.getBoundingClientRect().width)
+    setWidths(prev => prev.length === next.length && prev.every((w, i) => Math.abs(w - next[i]) < 0.5) ? prev : next)
+    const left = box.scrollLeft > 0
+    const right = box.scrollLeft + box.clientWidth < box.scrollWidth - 1
+    setScrolled(prev => prev.left === left && prev.right === right ? prev : { left, right })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!pinned) return
+    measure()
+    const table = tableRef.current
+    if (!table || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(table)
+    if (scrollRef.current) observer.observe(scrollRef.current)
+    return () => observer.disconnect()
+  }, [pinned, measure, visible, selectable, rows])
+
+  // ci is the cell's position in the row, counting the selection column.
+  const cellCount = visible.length + (selectable ? 1 : 0)
+  const pinInfo = (ci: number): PinInfo | null => {
+    if (!pinned || widths.length !== cellCount) return null
+    const leftCells = nStart > 0 ? nStart + (selectable ? 1 : 0) : 0
+    if (ci < leftCells) {
+      return { side: 'left', offset: widths.slice(0, ci).reduce((a, b) => a + b, 0), edge: ci === leftCells - 1 }
+    }
+    if (nEnd > 0 && ci >= cellCount - nEnd) {
+      return { side: 'right', offset: widths.slice(ci + 1).reduce((a, b) => a + b, 0), edge: ci === cellCount - nEnd }
+    }
+    return null
+  }
+  const pinStyle = (pin: PinInfo | null): React.CSSProperties | undefined => {
+    if (!pin) return undefined
+    const style: React.CSSProperties = { position: 'sticky', [pin.side]: pin.offset }
+    if (pin.edge && pin.side === 'left' && scrolled.left) style.boxShadow = 'inset -8px 0 6px -6px rgba(0,0,0,0.15)'
+    if (pin.edge && pin.side === 'right' && scrolled.right) style.boxShadow = 'inset 8px 0 6px -6px rgba(0,0,0,0.15)'
+    return style
+  }
+  const selOffset = selectable ? 1 : 0
 
   const totalPages = total === undefined ? 1 : Math.max(1, Math.ceil(total / pageSize))
   const colSpan = visible.length + (selectable ? 1 : 0)
@@ -159,12 +235,15 @@ export function DataTable<T>(props: DataTableProps<T>) {
             <Button variant="ghost" size="sm" onClick={clear}>{t('table.clear_selection')}</Button>
           </div>
         )}
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm" style={{ minWidth }}>
+        <div ref={scrollRef} className="overflow-x-auto" onScroll={pinned ? measure : undefined}>
+        <table ref={tableRef} className="w-full text-sm" style={{ minWidth }}>
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {selectable && (
-                <th className="w-10 px-4 py-3">
+                <th
+                  className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`}
+                  style={pinStyle(pinInfo(0))}
+                >
                   <Checkbox
                     aria-label={t('table.select_all')}
                     checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage}
@@ -176,11 +255,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
               {visible.map((col, colIndex) => {
                 const active = sort?.field === col.key
                 const sortable = col.sortable && !!onSortChange
+                const pin = pinInfo(colIndex + selOffset)
                 return (
                   <th
                     key={col.key}
                     aria-sort={active ? (sort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
-                    className={`text-left px-4 py-3 font-medium text-gray-600 ${col.headerClassName ?? ''}`}
+                    className={`text-left px-4 py-3 font-medium text-gray-600 ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
+                    style={pinStyle(pin)}
                   >
                     {sortable ? (
                       <button
@@ -207,9 +288,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
               const disabled = isRowDisabled?.(row) ?? false
               const checked = selected.has(key)
               return (
-                <tr key={key} className={`border-b border-gray-100 hover:bg-gray-50 ${checked ? 'bg-blue-50/40' : ''}`}>
+                <tr key={key} className={`group border-b border-gray-100 hover:bg-gray-50 ${checked ? 'bg-blue-50/40' : ''}`}>
                   {selectable && (
-                    <td className="w-10 px-4 py-2.5">
+                    <td
+                      className={`w-10 px-4 py-2.5 ${pinInfo(0) ? `z-10 ${checked ? PIN_BG_SELECTED : PIN_BG}` : ''}`}
+                      style={pinStyle(pinInfo(0))}
+                    >
                       <Checkbox
                         aria-label={t('table.select_row')}
                         checked={checked}
@@ -218,11 +302,18 @@ export function DataTable<T>(props: DataTableProps<T>) {
                       />
                     </td>
                   )}
-                  {visible.map(col => (
-                    <td key={col.key} className={`px-4 py-2.5 ${col.className ?? ''}`}>
-                      {col.render ? col.render(row, i) : String((row as Record<string, unknown>)[col.key] ?? '')}
-                    </td>
-                  ))}
+                  {visible.map((col, colIndex) => {
+                    const pin = pinInfo(colIndex + selOffset)
+                    return (
+                      <td
+                        key={col.key}
+                        className={`px-4 py-2.5 ${pin ? `z-10 ${checked ? PIN_BG_SELECTED : PIN_BG}` : ''} ${col.className ?? ''}`}
+                        style={pinStyle(pin)}
+                      >
+                        {col.render ? col.render(row, i) : String((row as Record<string, unknown>)[col.key] ?? '')}
+                      </td>
+                    )
+                  })}
                 </tr>
               )
             })}
@@ -233,7 +324,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
         </table>
         </div>
         {loading && (
-          <div role="status" aria-label={t('table.loading')} className="absolute inset-0 flex items-center justify-center bg-white/60">
+          <div role="status" aria-label={t('table.loading')} className="absolute inset-0 z-30 flex items-center justify-center bg-white/60">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           </div>
         )}
