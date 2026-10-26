@@ -1,0 +1,35 @@
+// Use the shared Playwright runner against an isolated Vite fixture server.
+const { firefox } = require('playwright')
+const assert = require('node:assert/strict')
+const base = process.env.NX_EDITOR_QA_URL || 'http://127.0.0.1:19514'
+if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) throw new Error('Loopback fixture required')
+;(async () => {
+  const browser = await firefox.launch({ headless: true })
+  try {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.goto(`${base}/tests/rich-editor.html`)
+    const editor = page.locator('.tiptap')
+    await editor.waitFor()
+    assert.equal(await editor.textContent(), 'Initial article')
+    await page.getByRole('button', { name: 'Replace value', exact: true }).click()
+    await page.waitForTimeout(100)
+    assert.equal(await editor.textContent(), 'Server replacement', 'controlled value must update editor')
+    assert.equal(await page.getByTestId('change-count').textContent(), '0', 'controlled replacement must not emit a user edit')
+    assert.equal(await editor.getAttribute('id'), 'article-body')
+    assert.equal(await editor.getAttribute('aria-describedby'), 'article-help')
+    assert.equal(await editor.getAttribute('role'), 'textbox')
+    await page.getByRole('button', { name: 'Toggle readonly', exact: true }).click()
+    assert.equal(await editor.getAttribute('contenteditable'), 'false')
+    assert.equal(await editor.getAttribute('aria-readonly'), 'true')
+    await page.getByRole('button', { name: 'Toggle readonly', exact: true }).click()
+    await editor.fill('User edit')
+    assert.ok(Number(await page.getByTestId('change-count').textContent()) > 0)
+    assert.ok((await page.getByTestId('stored-html').textContent()).includes('User edit'))
+    assert.deepEqual(errors, [])
+    await context.close()
+    process.stdout.write('rich-editor controlled/readonly/accessibility=PASS\n')
+  } finally { await browser.close() }
+})().catch(error => { process.stderr.write(`${error.stack}\n`); process.exitCode = 1 })

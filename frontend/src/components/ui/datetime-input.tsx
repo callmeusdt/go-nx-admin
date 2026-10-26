@@ -6,16 +6,32 @@ import { MandarinTraditional } from 'flatpickr/dist/l10n/zh-tw'
 import { Spanish } from 'flatpickr/dist/l10n/es'
 import { Vietnamese } from 'flatpickr/dist/l10n/vn'
 import { useI18n } from '../../contexts/i18n-context'
+import type { CustomLocale } from 'flatpickr/dist/types/locale'
 
-const calendarLocales = { 'zh-CN': Mandarin, 'zh-TW': MandarinTraditional, es: Spanish, vi: Vietnamese }
+const Urdu: CustomLocale = {
+  weekdays: {
+    shorthand: ['اتوار', 'پیر', 'منگل', 'بدھ', 'جمعرات', 'جمعہ', 'ہفتہ'],
+    longhand: ['اتوار', 'پیر', 'منگل', 'بدھ', 'جمعرات', 'جمعہ', 'ہفتہ'],
+  },
+  months: {
+    shorthand: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+    longhand: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+  },
+  rangeSeparator: ' تا ', weekAbbreviation: 'ہفتہ', scrollTitle: 'تبدیل کرنے کے لیے اسکرول کریں',
+  toggleTitle: 'تبدیل کرنے کے لیے کلک کریں', yearAriaLabel: 'سال', monthAriaLabel: 'مہینہ',
+  hourAriaLabel: 'گھنٹہ', minuteAriaLabel: 'منٹ', time_24hr: true,
+}
+const calendarLocales = { 'zh-CN': Mandarin, 'zh-TW': MandarinTraditional, es: Spanish, vi: Vietnamese, ur: Urdu }
 
 interface DateTimeInputProps {
   value: string
   placeholder: string
   onChange: (value: string) => void
+  /** Calendar date without time or timezone conversion. */
+  mode?: 'datetime' | 'date'
 }
 
-export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder, onChange }) => {
+export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder, onChange, mode = 'datetime' }) => {
   const { locale } = useI18n()
   const ref = useRef<HTMLInputElement>(null)
   const fpRef = useRef<flatpickr.Instance | null>(null)
@@ -26,8 +42,8 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder
     if (!ref.current) return
     fpRef.current?.destroy()
     fpRef.current = flatpickr(ref.current, {
-      enableTime: true,
-      dateFormat: 'Y-m-d H:i',
+      enableTime: mode === 'datetime',
+      dateFormat: mode === 'date' ? 'Y-m-d' : 'Y-m-d H:i',
       time_24hr: true,
       allowInput: false,
       locale: calendarLocales[locale as keyof typeof calendarLocales] ?? 'default',
@@ -36,16 +52,16 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({ value, placeholder
       },
     })
     return () => { fpRef.current?.destroy() }
-  }, [locale])
+  }, [locale, mode])
 
   useEffect(() => {
     if (!fpRef.current) return
     fpRef.current.setDate(value || '', false)
-  }, [value, locale])
+  }, [value, locale, mode])
 
   return (
     <div className="relative">
-      <input ref={ref} type="text" placeholder={placeholder} readOnly className="flex h-10 w-full rounded-md border border-gray-300 bg-white pl-3 pr-9 py-2 text-sm cursor-pointer hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+      <input ref={ref} type="text" aria-label={placeholder} placeholder={placeholder} readOnly className="flex h-10 w-full rounded-md border border-gray-300 bg-white pl-3 pr-9 py-2 text-sm cursor-pointer hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
       <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
     </div>
   )

@@ -8,6 +8,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 - 前端:`cd frontend && npx tsc --noEmit -p . && npx vite build`
 - 完整构建:`make build`(前端嵌入 `backend/cmd/frontend/dist/`,产物 `nx-admin`);启动 `./nx-admin serve`(会迁移并写种子)。
 - 可选数据库回归:PostgreSQL `NX_TEST_DATABASE_DSN` / `NX_TEST_POSTGRES_DSN`,MySQL/MariaDB `NX_TEST_MYSQL_DSN`(go-sql-driver 格式,如 `root@unix(/run/mysqld/mysqld.sock)/?parseTime=true`);SQLite 始终运行。
+- `app/audit_test.go`：授权请求在返回前完成审计写入（独立3秒超时），避免未跟踪goroutine在runtime/pool关闭后丢尾部日志；阻塞INSERT回归覆盖SQLite与显式MySQL隔离库。审计失败不改写已执行业务响应，不提供崩溃持久队列保证。
 
 ## 后端
 
@@ -21,6 +22,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `database.go` | `OpenDatabase(cfg)`:`Run` 与 `reset-password` 共用的连库与连接池;SQLite 自动补 `_busy_timeout=5000`+WAL(`_pragma` 自管则不动),池上限 8(**不能设 1**:Casbin 适配器在事务内再用外层句柄会死锁) |
 | `bootstrap.go` | `BootstrapAdmin`(PostgreSQL/MySQL/SQLite) |
 | `uploads.go` | `/uploads` 挂载与安全响应头;`RequiredDirs` 在 `app.go`,启动先建 data/logs/uploads/SQLite 与密钥文件父目录 |
+| `actor.go` | `CurrentActor(c)`：仅在底座认证和授权后的业务路由读取当前主体 `Actor{ID,Username,Role,RoleID}`；缺失、零 ID 或错误类型返回 `false`，不从请求输入取身份 |
 | `static.go` | 前端静态服务;每次请求重渲染 index.html 注入 `site.title`/favicon,`/_site/favicon` 提供本地 favicon;`assets/favicon.svg` 为内置牛图标 |
 | `*_test.go` | `bearer_test`/`browser_test`(Cookie+MFA)/`batch_test`/`password_test`(改密、强制改密、客户端 IP、仪表盘合并、`/auth/permissions`)/`media_test`/`static_test`/`runtime_*` |
 
@@ -65,8 +67,8 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**;`buildRoutes` 装配所有页面 |
 | `dashboard/` | **仪表盘定制**,见下节 |
-| `components/ui/` | 公共视觉组件(基座统一入口):`button`(`asChild`)、`input`、`textarea`、`select`(Radix,自绘下拉)、`checkbox`、`radio-group`、`switch`、`datetime-input`;`form-field`、`filter-bar`;`dialog`、`confirm-dialog`、`popover`、`dropdown-menu`、`tooltip`、`toast`(`ToastProvider` 在 `createApp` 内,`useToast`);`alert`、`badge`、`spinner`、`empty-state`、`skeleton`、`page-header`、`icon-button`、`tabs`;`data-table`(列设置在表头末列、批量条在卡片内)、`table`(`SimpleTable*`) |
-| `components/layout/` | `index.tsx` 外壳(顶栏单行:折叠按钮 + 页签 + 右侧工具区,无面包屑);`route-labels.ts`(`RouteLabelsContext`);`sidebar.tsx`(随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单;`/auth/menus` 返回前显示骨架,不先画基座菜单);`tabs.tsx`(位于顶栏内,`flex-1 min-w-0` 横向滚动,不挤右侧工具区;横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
+| `components/ui/` | 公共视觉组件(基座统一入口):`button`(`asChild`)、`input`、`textarea`、`select`(Radix,自绘下拉；Trigger透传id/aria-describedby/aria-invalid以关联FormField)、`checkbox`、`radio-group`、`switch`、`datetime-input`;`form-field`、`filter-bar`;`dialog`、`confirm-dialog`、`popover`、`dropdown-menu`、`tooltip`、`toast`(`ToastProvider` 在 `createApp` 内,`useToast`);`alert`、`badge`、`spinner`、`empty-state`、`skeleton`、`page-header`、`icon-button`、`tabs`;`data-table`(列设置在表头末列、批量条在卡片内)、`table`(`SimpleTable*`) |
+| `components/layout/` | `index.tsx` 外壳(顶栏单行:折叠按钮 + 页签 + 右侧工具区,无面包屑);`route-labels.ts`(`RouteLabelsContext`);`sidebar.tsx`(直达已授权叶子路由时登记页签以保留 pane,随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单;`/auth/menus` 返回前显示骨架,不先画基座菜单);`tabs.tsx`(位于顶栏内,`flex-1 min-w-0` 横向滚动,不挤右侧工具区;横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
 | `components/ui/switch.tsx` | 公共开关 `Switch`(`checked`/`onCheckedChange`/`label`/`description`/`disabled`,`role=switch`)。只有开/关两态的字段一律用它,不用下拉框或裸复选框;多选列表(如角色授权)仍用复选框 |
 | `components/ui/data-table.tsx` | 通用表格:服务端分页、可选排序、行选择(跨页保留,跳过禁用行,表头支持半选)、批量操作条(在表格卡片顶部,选中才出现)、列设置(图标在表头末列,`storageKey` 持久化)、`toolbar` 扩展按钮区(表格上方右侧)、`stickyStart`/`stickyEnd` 让首/尾 N 个可见数据列粘住表格两侧(sticky,测量表头宽度算偏移,选择列随首侧粘住,边缘出阴影) |
 | `components/security/` | `password-form.tsx`(改密表单)、`force-password-change.tsx`(`PasswordGate`) |
@@ -102,3 +104,9 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 
 ## 已知未覆盖(有意搁置)
 密码过期/复杂度策略、登录设备管理、部门/岗位、数据范围权限、字典、多角色用户、导入导出、通知、定时任务、监控、SSO/OAuth2/LDAP、邮件/短信、WebSocket/SSE、Dockerfile/CI、版本化迁移、结构化日志/指标、多租户、字段级审计。
+
+## 富文本受控值与只读
+
+`frontend/src/components/ui/rich-editor.tsx` 响应外部 `value` 变化且不触发用户修改回调；`readOnly` 同步编辑器可编辑状态，支持表单 `id`、`aria-label`、`aria-describedby`。隔离 Vite fixture 为 `frontend/tests/rich-editor.html`，共享 Firefox 脚本 `frontend/tests/rich-editor.cjs` 验证异步正文回填、只读切换、表单关联及用户编辑。用 `NX_EDITOR_QA_URL=http://127.0.0.1:<port> /root/playwright/run <absolute-path>/frontend/tests/rich-editor.cjs` 指定回环 fixture；本地及 mgt 独立快照均已通过，mgt 同时通过 tsc/build。
+
+- `DateTimeInput` 支持可选 `mode="date"`，返回不带时区转换的 `YYYY-MM-DD`；省略时保留日期时间行为。
