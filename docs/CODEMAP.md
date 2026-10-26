@@ -104,6 +104,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 
 ## 已知未覆盖(有意搁置)
 密码过期/复杂度策略、登录设备管理、部门/岗位、数据范围权限、字典、多角色用户、导入导出、通知、定时任务、监控、SSO/OAuth2/LDAP、邮件/短信、WebSocket/SSE、Dockerfile/CI、版本化迁移、结构化日志/指标、多租户、字段级审计。
+
 ## 富文本受控值与只读
 
 `frontend/src/components/ui/rich-editor.tsx` 响应外部 `value` 变化且不触发用户修改回调；`readOnly` 同步编辑器可编辑状态，支持表单 `id`、`aria-label`、`aria-describedby`。隔离 Vite fixture 为 `frontend/tests/rich-editor.html`，共享 Firefox 脚本 `frontend/tests/rich-editor.cjs` 验证异步正文回填、只读切换、表单关联及用户编辑。用 `NX_EDITOR_QA_URL=http://127.0.0.1:<port> /root/playwright/run <absolute-path>/frontend/tests/rich-editor.cjs` 指定回环 fixture；本地及 mgt 独立快照均已通过，mgt 同时通过 tsc/build。
