@@ -73,7 +73,7 @@ export const PasswordForm: React.FC<Props> = ({ mfaEnabled, onChanged, onCancel,
       )}
       <p className="text-xs text-gray-400">{t('password.policy')}</p>
       {error && <Alert>{error}</Alert>}
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-3">
         {onCancel && <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>{cancelLabel ?? t('common.cancel')}</Button>}
         <Button type="submit" disabled={busy}>{busy ? t('users.saving') : t('password.submit')}</Button>
       </div>

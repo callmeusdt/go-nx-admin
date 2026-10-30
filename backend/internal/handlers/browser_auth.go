@@ -48,7 +48,7 @@ func browserLogin(c *fiber.Ctx, db *gorm.DB, user models.User) error {
 		return c.Status(503).JSON(fiber.Map{"code": "LOGIN_FAILED"})
 	}
 	middleware.SetSessionCookies(c, token, csrf, session.ExpiresAt)
-	recordLoginLog(db, user.Username, c, "mfa_required", "browser MFA verification or enrollment required", start)
+	recordLoginLog(db, user.Username, c, "success", "browser login without MFA", start)
 	return c.JSON(fiber.Map{"mfa_required": purpose == "mfa", "enrollment_required": !user.MFAEnabled, "user": fiber.Map{"id": user.ID, "username": user.Username, "role": user.Role.Slug}})
 }
 

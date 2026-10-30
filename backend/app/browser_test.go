@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func TestStrictCookieEnrollmentAndMFA(t *testing.T) {
+func TestStrictCookieLoginAndMFA(t *testing.T) {
 	opts := runtimeOptions(t)
 	if dsn := os.Getenv("NX_TEST_DATABASE_DSN"); dsn != "" {
 		admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -151,10 +151,10 @@ func TestStrictCookieEnrollmentAndMFA(t *testing.T) {
 	login := `{"username":"strict","password":"strict-test-password"}`
 	request("POST", "/api/v1/auth/login", login, "https://evil.test", false, 403)
 	result := request("POST", "/api/v1/auth/login", login, origin, false, 200)
-	if result["token"] != nil || result["enrollment_required"] != true {
-		t.Fatal("browser login exposed token or skipped enrollment")
+	if result["token"] != nil || result["enrollment_required"] != false {
+		t.Fatal("browser login exposed token or forced MFA enrollment")
 	}
-	request("GET", "/api/v1/users", "", origin, false, 403)
+	request("GET", "/api/v1/users", "", origin, false, 200)
 	request("POST", "/api/v1/bim/login", "{}", origin, true, 403)
 	request("POST", "/api/v1/auth/mfa/setup", "{}", origin, false, 403)
 	setup := request("POST", "/api/v1/auth/mfa/setup", "{}", origin, true, 200)

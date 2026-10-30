@@ -4,7 +4,6 @@ import { Refine } from '@refinedev/core'
 import routerBindings from '@refinedev/react-router-v6'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { configureSession, usesCookieSession, sessionFetch } from './lib/session'
-import { EnrollmentPage } from './pages/enrollment'
 import { Reauthenticate } from './components/reauthenticate'
 import { authProvider } from './providers/auth-provider'
 import { dataProvider } from './providers/data-provider'
@@ -45,22 +44,20 @@ const BUILTIN_RESOURCES: ResourceProps[] = [
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useI18n()
   const location = useLocation()
-  const [state, setState] = useState<'loading' | 'ready' | 'login' | 'enroll'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'login'>('loading')
   useEffect(() => {
     if (!usesCookieSession()) return
     let active = true
     // Keep the mounted layout during route revalidation; initial state still gates entry.
-    void sessionFetch('/api/v1/auth/me').then(async response => {
+    void sessionFetch('/api/v1/auth/me').then(response => {
       if (!response.ok) { if(active)setState('login'); return }
-      const user = await response.json()
-      if(active)setState(user.mfa_enabled ? 'ready' : 'enroll')
+      if(active)setState('ready')
     }).catch(() => { if(active)setState('login') })
     return () => { active = false }
   }, [location.pathname])
   if (usesCookieSession()) {
     if(state==='loading')return <div role="status" aria-label={t('common.loading')} />
     if(state==='login')return <Navigate to="/login" replace />
-    if(state==='enroll')return <EnrollmentPage />
     return <>{children}</>
   }
   const token = localStorage.getItem('auth_token')
