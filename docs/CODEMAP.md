@@ -15,7 +15,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 ### 公开入口 `backend/app/`
 | 文件 | 内容 |
 |---|---|
-| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`(`log.Fatal`)/`RunE`(返回 error,委托 `NewRuntime`,SIGINT/SIGTERM 关停并释放缓存、连接池、日志文件);`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
+| `app.go` | `Options`(`EmbedFS`/`ExtraModels`/`ExtraRoutes`/`ExtraPublicRoutes`/`AfterMigrate`/`ExtraPermissions`/`ExtraPermissionExpand`/**`DashboardStats`**)与 `Run`(`log.Fatal`)/`RunE`(返回 error,委托 `NewRuntime`,SIGINT/SIGTERM 关停并释放缓存、连接池、日志文件);`app.Cache`、`app.Storage` 及 `ErrCacheMiss`/`ErrStorageNotFound` 别名 |
 | `runtime.go` | `NewRuntime(RuntimeOptions)`:显式生命周期,也是 `Run`/`RunE` 的 HTTP 栈(`errorHandler`、`/health`、日志、静态页只在此一处);`rollbackGlobals` 回滚全局(权限扩展、`handlers.ExtraDashboardStats`、cache、storage),新增进程级全局必须纳入这里 |
 | `secret.go` | `EnsureJWTSecret(path)`:给 `NewRuntime` 调用方的“生成一次并复用”密钥辅助 |
 | `sqlutil.go` | 公开 `ContainsFold`/`EscapeLike`(委托 `internal/dbutil`):大小写不敏感、转义 `%`/`_` 的包含筛选,三库一致 |

@@ -81,12 +81,6 @@ func BrowserAuth(db *gorm.DB) fiber.Handler {
 		if err := db.Preload("Role").First(&user, session.UserID).Error; err != nil || user.Status != 1 {
 			return browserError(c, 401, "UNAUTHENTICATED")
 		}
-		if session.Purpose == "full" && !user.MFAEnabled {
-			allowed := path == "/api/v1/auth/me" && method == "GET" || method == "POST" && (path == "/api/v1/auth/mfa/setup" || path == "/api/v1/auth/mfa/enable" || path == "/api/v1/auth/logout")
-			if !allowed {
-				return browserError(c, 403, "MFA_ENROLLMENT_REQUIRED")
-			}
-		}
 		if session.Purpose == "full" && user.MustChangePassword && !passwordChangePaths[method+" "+path] {
 			return passwordChangeRequired(c)
 		}

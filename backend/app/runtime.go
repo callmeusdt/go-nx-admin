@@ -169,6 +169,9 @@ func NewRuntime(opts RuntimeOptions) (result *Runtime, resultErr error) {
 		return c.JSON(fiber.Map{"status": "ok", "db": "connected"})
 	})
 	routes.RegisterWithOptions(r.App, opts.DB, enforcer, opts.Extensions.ExtraRoutes, opts.DisableMedia)
+	if opts.Extensions.ExtraPublicRoutes != nil {
+		opts.Extensions.ExtraPublicRoutes(r.App, opts.DB, enforcer)
+	}
 	if opts.PublicUploads {
 		serveUploads(r.App, opts.Config.Upload.Dir)
 	}

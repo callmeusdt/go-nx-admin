@@ -28,6 +28,7 @@ type Options struct {
 	EmbedFS               fs.FS
 	ExtraModels           []interface{}
 	ExtraRoutes           func(api fiber.Router, db *gorm.DB, enforcer *casbin.Enforcer)
+	ExtraPublicRoutes     func(app *fiber.App, db *gorm.DB, enforcer *casbin.Enforcer)
 	AfterMigrate          func(db *gorm.DB)
 	ExtraPermissions      []PermissionDef
 	ExtraPermissionExpand func(string) [][]string

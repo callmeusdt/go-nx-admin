@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input'
 import { Alert } from '../components/ui/alert'
 import { FormField } from '../components/ui/form-field'
 
-// Mandatory enrollment uses the same white controls as the existing admin.
+// Optional enrollment uses the same white controls as the existing admin.
 export const EnrollmentPage: React.FC = () => {
   const { t } = useI18n()
   const copy = { title: t('enrollment.title'), hint: t('enrollment.hint'), error: t('enrollment.error'), save: t('enrollment.save'), continue: t('enrollment.continue'), setup: t('enrollment.setup'), code: t('enrollment.code'), enable: t('enrollment.enable'), logout: t('enrollment.logout'), secret: t('enrollment.secret') }
@@ -22,14 +22,14 @@ export const EnrollmentPage: React.FC = () => {
       <h1 className="text-xl font-semibold">{copy.title}</h1>
       <p>{copy.hint}</p>
       {error?<Alert>{error}</Alert>:null}
-      {codes.length?<><p>{copy.save}</p><pre className="rounded-md bg-gray-50 p-4 font-mono text-sm">{codes.join('\n')}</pre><Button onClick={()=>location.reload()}>{copy.continue}</Button></>:<>
+      {codes.length?<><p>{copy.save}</p><pre className="rounded-md bg-gray-50 p-4 font-mono text-sm">{codes.join('\n')}</pre><div className="flex flex-wrap gap-3"><Button onClick={()=>location.reload()}>{copy.continue}</Button></div></>:<>
         {!secret?<Button disabled={busy} onClick={()=>void run(async()=>{const data=await call('mfa/setup');setSecret(data.secret)})}>{copy.setup}</Button>:<form className="space-y-4" onSubmit={e=>{e.preventDefault();void run(async()=>{const data=await call('mfa/enable',{code});setCodes(data.recovery_codes);setSecret('');setCode('')})}}>
           <p className="break-all font-mono" aria-label={copy.secret}>{secret}</p>
           <FormField label={copy.code}>{id=><Input id={id} value={code} onChange={e=>setCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" maxLength={6}/>}</FormField>
           <Button disabled={busy||code.length!==6}>{copy.enable}</Button>
         </form>}
       </>}
-      <Button variant="outline" disabled={busy} onClick={()=>void run(async()=>{await call('logout');clearSession();location.href='/login'})}>{copy.logout}</Button>
+       <div className="flex flex-wrap gap-3"><Button variant="outline" disabled={busy} onClick={()=>void run(async()=>{await call('logout');clearSession();location.href='/login'})}>{copy.logout}</Button></div>
     </section>
   </main>
 }
