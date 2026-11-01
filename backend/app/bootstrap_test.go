@@ -1,11 +1,14 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -143,5 +146,74 @@ func testBootstrapAdmin(t *testing.T, target *gorm.DB) {
 	target.First(&current, users[0].ID)
 	if current.Password != users[0].Password || current.Username != users[0].Username {
 		t.Fatal("repeat bootstrap changed credentials")
+	}
+}
+
+func TestBootstrapAdminMySQLRejectsNonEmptyAndRollsBack(t *testing.T) {
+	target := bootstrapTarget(t, "mysql")
+	if err := MigrateSchema(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Exec("INSERT INTO admin_casbin_rule(ptype,v0,v1,v2) VALUES('p','existing','.*','.*')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(BootstrapAdmin(target, "operator", "bootstrap-test-password"), ErrAdminAlreadyInitialized) {
+		t.Fatal("nonempty policy table did not block bootstrap")
+	}
+	if err := target.Exec("DELETE FROM admin_casbin_rule").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Exec("CREATE TRIGGER nx_u02_reject_policy BEFORE INSERT ON admin_casbin_rule FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'u02 injected failure'").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := BootstrapAdmin(target, "operator", "bootstrap-test-password"); err == nil || !strings.Contains(err.Error(), "u02 injected failure") {
+		t.Fatalf("injected policy failure was not returned: %v", err)
+	}
+	for _, table := range bootstrapTables {
+		var count int64
+		if err := target.Table(table).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("failed bootstrap left data in %s: count=%d err=%v", table, count, err)
+		}
+	}
+	if err := target.Exec("DROP TRIGGER nx_u02_reject_policy").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := BootstrapAdmin(target, "operator", "bootstrap-test-password"); err != nil {
+		t.Fatalf("retry after rollback failed: %v", err)
+	}
+}
+
+func TestBootstrapAdminMySQLLockTimeoutAndDisconnect(t *testing.T) {
+	target := bootstrapTarget(t, "mysql")
+	if err := MigrateSchema(target); err != nil {
+		t.Fatal(err)
+	}
+	lockPool, err := sql.Open("mysql", os.Getenv("NX_TEST_MYSQL_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockPool.Close()
+	lockConn, err := lockPool.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockConn.Close()
+	var locked int
+	if err := lockConn.QueryRowContext(context.Background(), "SELECT GET_LOCK('nx_bootstrap_admin', 0)").Scan(&locked); err != nil || locked != 1 {
+		t.Fatalf("could not hold bootstrap lock: locked=%d err=%v", locked, err)
+	}
+	if err := BootstrapAdmin(target, "operator", "bootstrap-test-password"); err == nil || !strings.Contains(err.Error(), "bootstrap lock timeout") {
+		t.Fatalf("expected lock timeout, got %v", err)
+	}
+	// Closing the owning pool and connection disconnects the lock holder; no
+	// server-wide KILL privilege is required of the test account.
+	if err := lockPool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := lockConn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := BootstrapAdmin(target, "operator", "bootstrap-test-password"); err != nil {
+		t.Fatalf("bootstrap after lock holder disconnect failed: %v", err)
 	}
 }

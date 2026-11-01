@@ -115,13 +115,21 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
     if (!menuItems) return
     const ancestors = findMenuAncestors(menuItems, location.pathname)
     if (!ancestors) return
+    // A bookmarked/refreshed route has not gone through handleMenuClick yet.
+    // Register its authorised leaf so leaving it does not discard its pane.
+    let siblings = menuItems
+    for (const key of ancestors) siblings = siblings.find(item => item.key === key)?.children ?? []
+    const current = siblings.find(item => item.key === location.pathname)
+    if (current && !current.children?.length && current.key.startsWith('/')) {
+      addTab({ key: current.key, label: current.label, icon: current.icon, closable: current.key !== home })
+    }
     if (ancestors.length) {
       setOpenKeys(prev => ancestors.every(k => prev.has(k)) ? prev : new Set([...prev, ...ancestors]))
     }
     requestAnimationFrame(() => {
       navRef.current?.querySelector('[data-menu-active="true"]')?.scrollIntoView?.({ block: 'nearest' })
     })
-  }, [location.pathname, menuItems])
+  }, [location.pathname, menuItems, addTab, home])
 
   const handleMenuClick = (item: MenuItem) => {
     if (item.children?.length) {
