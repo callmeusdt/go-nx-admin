@@ -67,7 +67,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 |---|---|
 | `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**;`buildRoutes` 装配所有页面 |
 | `dashboard/` | **仪表盘定制**,见下节 |
-| `components/ui/` | 公共视觉组件(基座统一入口):`button`(`asChild`)、`input`、`textarea`、`select`(Radix,自绘下拉；Trigger透传id/aria-describedby/aria-invalid以关联FormField)、`checkbox`、`radio-group`、`switch`、`datetime-input`;`form-field`、`filter-bar`;`dialog`、`confirm-dialog`、`popover`、`dropdown-menu`、`tooltip`、`toast`(`ToastProvider` 在 `createApp` 内,`useToast`);`alert`、`badge`、`spinner`、`empty-state`、`skeleton`、`page-header`、`icon-button`、`tabs`;`data-table`(列设置在表头末列、批量条在卡片内)、`table`(`SimpleTable*`) |
+| `components/ui/` | 公共视觉组件(基座统一入口):`button`(`asChild`)、`input`、`textarea`、`select`(Radix,自绘下拉；Trigger透传id/aria-describedby/aria-invalid以关联FormField)、`checkbox`、`radio-group`、`switch`、`datetime-input`;`form-field`、`filter-bar`;`dialog`、`confirm-dialog`、`popover`、`dropdown-menu`、`tooltip`、`toast`(`ToastProvider` 在 `createApp` 内,`useToast`);`alert`、`badge`、`spinner`、`empty-state`、`skeleton`、`page-header`(兼容 `actions`,支持 `primaryActions`/`secondaryActions` 分组与分隔线)、`icon-button`、`tabs`;`data-table`(列设置在表头末列、批量条在卡片内)、`table`(`SimpleTable*`) |
 | `components/layout/` | `index.tsx` 外壳(顶栏单行:折叠按钮 + 页签 + 右侧工具区,无面包屑);`route-labels.ts`(`RouteLabelsContext`);`sidebar.tsx`(直达已授权叶子路由时登记页签以保留 pane,随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单;`/auth/menus` 返回前显示骨架,不先画基座菜单);`tabs.tsx`(位于顶栏内,`flex-1 min-w-0` 横向滚动,不挤右侧工具区;横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
 | `components/ui/switch.tsx` | 公共开关 `Switch`(`checked`/`onCheckedChange`/`label`/`description`/`disabled`,`role=switch`)。只有开/关两态的字段一律用它,不用下拉框或裸复选框;多选列表(如角色授权)仍用复选框 |
 | `components/ui/data-table.tsx` | 通用表格:服务端分页、可选排序、行选择(跨页保留,跳过禁用行,表头支持半选)、批量操作条(在表格卡片顶部,选中才出现)、列设置(图标在表头末列,`storageKey` 持久化)、`toolbar` 扩展按钮区(表格上方右侧)、`stickyStart`/`stickyEnd` 让首/尾 N 个可见数据列粘住表格两侧(sticky,测量表头宽度算偏移,选择列随首侧粘住,边缘出阴影) |
@@ -100,7 +100,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 `server`(含代理信任)/`database`/`jwt`/`site`/`cors`/`session`/`login`/`upload`(local|s3)/`captcha`/`cache`(memory|redis)。`site.title`/`site.favicon` 修改后无需重建前端。
 
 ## 脚手架 `scaffold.sh`
-生成二开项目的 `go.mod` replace、`cmd/main.go`、Makefile、前端骨架(`createApp` 注入点注释)。改动 `app.Options` 或 `CreateAppOptions` 时同步其注释示例。
+生成二开项目的 `go.mod` replace、`cmd/main.go`、Makefile、`.air.toml`、`config.example.yaml`/`config.yaml` 和前端骨架(`createApp` 注入点注释)。`dev-backend-air` 从二开项目根目录启动并构建 `./cmd`；已存在的 `config.yaml` 不覆盖。改动 `app.Options` 或 `CreateAppOptions` 时同步其注释示例。
 
 ## 已知未覆盖(有意搁置)
 密码过期/复杂度策略、登录设备管理、部门/岗位、数据范围权限、字典、多角色用户、导入导出、通知、定时任务、监控、SSO/OAuth2/LDAP、邮件/短信、WebSocket/SSE、Dockerfile/CI、版本化迁移、结构化日志/指标、多租户、字段级审计。
