@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button'
 import { Alert } from '../components/ui/alert'
 import { sessionFetch, rememberLogin } from '../lib/session'
 import { useHomePath } from '../dashboard/context'
+import { siteTitle } from '../lib/site-branding'
 
 interface CaptchaInfo {
   id: string
@@ -36,6 +37,7 @@ function fpHash(): string {
 
 export const LoginPage: React.FC = () => {
   const { t } = useI18n()
+  const brand = siteTitle() || t('login.title')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -171,7 +173,7 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
       <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">{t('login.title')}</h1>
+           <h1 className="text-2xl font-bold text-slate-900">{brand}</h1>
           <p className="text-slate-500 mt-2">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -25,9 +25,10 @@ const (
 var builtinFavicon []byte
 
 var (
-	titleTag   = regexp.MustCompile(`(?is)<title[^>]*>.*?</title>`)
-	iconLink   = regexp.MustCompile(`(?is)<link[^>]+rel=["'](?:shortcut )?icon["'][^>]*>`)
-	headCloser = regexp.MustCompile(`(?i)</head>`)
+	titleTag      = regexp.MustCompile(`(?is)<title[^>]*>.*?</title>`)
+	iconLink      = regexp.MustCompile(`(?is)<link[^>]+rel=["'](?:shortcut )?icon["'][^>]*>`)
+	siteTitleMeta = regexp.MustCompile(`(?is)<meta[^>]+name=["']nx-site-title["'][^>]*>`)
+	headCloser    = regexp.MustCompile(`(?i)</head>`)
 )
 
 func siteConfig() config.SiteConfig {
@@ -57,17 +58,22 @@ func renderIndex(src []byte, site config.SiteConfig) []byte {
 	}
 	out := string(src)
 	tag := "<title>" + html.EscapeString(title) + "</title>"
+	meta := `<meta name="nx-site-title" content="` + html.EscapeString(title) + `" />`
 	link := `<link rel="icon" href="` + html.EscapeString(href) + `" />`
+	branding := meta + "\n  " + link
 	out = iconLink.ReplaceAllString(out, "")
+	out = siteTitleMeta.ReplaceAllString(out, "")
 	if titleTag.MatchString(out) {
 		out = titleTag.ReplaceAllLiteralString(out, tag)
+	} else if headCloser.MatchString(out) {
+		out = headCloser.ReplaceAllString(out, "  "+tag+"\n  </head>")
 	} else {
-		link = tag + link
+		out = tag + out
 	}
 	if headCloser.MatchString(out) {
-		out = headCloser.ReplaceAllLiteralString(out, "  "+link+"\n  </head>")
+		out = headCloser.ReplaceAllString(out, "  "+branding+"\n  </head>")
 	} else {
-		out = link + out
+		out = meta + out
 	}
 	return []byte(out)
 }

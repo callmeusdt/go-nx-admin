@@ -21,6 +21,7 @@ import {
 import { api } from '../../lib/api'
 import { Menu } from '../../types'
 import { useI18n } from '../../contexts/i18n-context'
+import { siteTitle } from '../../lib/site-branding'
 
 interface MenuItem {
   key: string
@@ -92,6 +93,7 @@ const MenuSkeleton: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
 
 export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const { t, routeLabel } = useI18n()
+  const brand = siteTitle() || t('login.title')
   const { addTab } = useTabs()
   const navigate = useNavigate()
   const home = useHomePath()
@@ -187,12 +189,12 @@ export const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
     <aside className={`${collapsed ? 'w-16' : 'w-56'} bg-slate-900 text-white flex flex-col h-full shrink-0 transition-all duration-200`}>
       <div className="h-14 flex items-center border-b border-slate-700 overflow-hidden shrink-0">
         {collapsed ? (
-          <span className="w-full text-center font-bold text-lg">{Array.from(t('login.title'))[0]}</span>
+          <span className="w-full text-center font-bold text-lg">{Array.from(brand)[0]}</span>
         ) : (
-          <h1 className="font-bold text-lg w-full px-5 truncate">{t('login.title')}</h1>
+          <h1 className="font-bold text-lg w-full px-5 truncate">{brand}</h1>
         )}
       </div>
-      <nav ref={navRef} className="flex-1 overflow-y-auto p-2 space-y-1" aria-busy={!menuItems}>
+      <nav ref={navRef} className="flex-1 overflow-y-auto scrollbar-none p-2 space-y-1" aria-busy={!menuItems}>
         {menuItems ? renderMenu(menuItems) : <MenuSkeleton collapsed={collapsed} />}
       </nav>
     </aside>
