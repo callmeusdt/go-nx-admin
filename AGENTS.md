@@ -10,7 +10,7 @@ Fiber + GORM + Casbin 后端，React + Refine + Shadcn/ui 前端；支持独立�
 - 显式runtime沿用底座全局配置，仅支持每进程一个实例且不得与Run混用；Close超时后保留实例锁至进程退出，不能在旧请求仍运行时复用配置。DB连接始终由调用方关闭。
 - 二开权限通过 `ExtraPermissions` / `ExtraPermissionExpand` 注入，业务代码与 submodule 同级独立维护，不直接二改底座。
 - 前端通过 `frontend/src/core.tsx` 的 `createApp(opts)` 注入 `extraResources`、`extraRoutes`、`extraRouteLabels`，业务页面留在二开项目自己的 `frontend/src/pages/`。
-- `createApp({i18n:{languages,messages,defaultLocale}})`可选扩展语言列表和文案，不配置仍为原中英。`messages[locale]['login.title']`覆盖登录/侧栏品牌；`routes.<完整路径>`覆盖侧栏/页签标题。动态菜单仍以服务端授权为准，翻译不新增菜单权限；业务页使用同一useI18n上下文。
+- i18n 是标准前端功能；`createApp({i18n:{languages,messages,defaultLocale}})`用于二开扩展语言列表和文案，不配置时使用内置语言。所有页面、组件、路由标题、可访问文案、错误和空状态必须通过 `useI18n`/语言包实现，不得硬编码；`messages[locale]['login.title']`覆盖登录/侧栏品牌，`routes.<完整路径>`覆盖侧栏/页签标题。动态菜单仍以服务端授权为准，翻译不新增菜单权限；完整规则见 `docs/development.md`。
 - 仪表盘：`createApp({dashboard:{widgets,hide,page}, homePath})` 增删/覆盖卡片或整页替换；widget 的 `permission` 只控制显示，数据接口须自行鉴权；后端数字经 `app.Options.DashboardStats` 合并（同名键覆盖内置）。
 - 修改扩展接口前先读上述公开入口；底座升级要保持二开可 import 和 embed 构建边界，不用内部包绕过公开 API。
 
