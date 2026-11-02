@@ -74,7 +74,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 | `components/security/` | `password-form.tsx`(改密表单)、`force-password-change.tsx`(`PasswordGate`) |
 | `hooks/use-batch.tsx` | 批量操作确认框与逐 id 失败汇总;用户/角色/API/媒体页复用 |
 | `pages/` | `users`/`roles`/`menus`/`apis`/`audit-logs`/`login-logs`/`media`/`system-config`、`login`、`mfa-verify`、`enrollment` |
-| **CRUD 页面规范** | 列表页六区(标题/搜索/批量/数据/分页/扩展工具)、弹窗与独立页的新建编辑、删除确认、文案与检查清单:`docs/20261020-0212-crud-page-conventions.md`;现有页面对照表在该文末尾 |
+| **CRUD 页面规范** | 列表页六区(标题/搜索/批量/数据/分页/扩展工具)、弹窗与独立页的新建编辑、删除确认、文案与检查清单:`docs/crud-page-conventions.md`;现有页面对照表在该文末尾 |
 | `contexts/` | `i18n-context`(五语言,`messages/*.ts` 按模块拆分)、`tabs-context`(`withHome` 保证首页标签始终存在、排首位、不可关闭,会修复本地存储里过期的标签)、`lock-screen-context` |
 | `providers/`、`lib/` | `auth-provider`、`data-provider`;`api.ts`(含 401 后 refresh 重试)、`session.ts`(令牌/Cookie 会话,登录/登出时清权限缓存) |
 

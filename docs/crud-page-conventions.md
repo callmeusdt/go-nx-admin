@@ -1,10 +1,12 @@
 # CRUD 页面规范
 
-适用于基座和所有二开项目的数据管理页。目标是新页面不用再做视觉决策:按本文的区域顺序和组件对照搭,效果与用户、角色、菜单等现有页一致。
+适用于基座和所有二开项目的数据管理页。目标是新页面不用再做视觉决策:按本文的区域顺序和组件对照搭,效果与用户、角色、菜单等现有页一致。本文也明确二开页面的范围边界:需求没有要求时,不额外增加“按 ID 查看”、详情卡片、行内详情区块或列表下方的详情面板。
 
 组件来源均在 `frontend/src/components/ui/`,清单见 `docs/CODEMAP.md`。缺组件时先在 `ui/` 加封装,不在页面里临时拼样式(见 `AGENTS.md` 前端规范)。
 
 > 说明:基座现有 CRUD 页都用**弹窗**编辑和新建。"独立编辑页/新建页"一节描述的是基座机制能支撑的做法,基座本身还没有现成实例,二开首次使用时请对照本文落地并回补样板。
+
+> **AI/代理执行边界:**执行 CRUD 二开时,除非需求或开发者明确提出,不得自行添加“按 ID 查看”、查看详情按钮、详情卡片、行内展开详情、列表下方详情面板或额外的 ID 查询区块。看到模型有 `id` 字段、存在详情 API 或认为“这样更完整”,都不是增加这些 UI 的理由;不确定时保持列表页最小结构并等待明确需求。
 
 ## 1. 列表页
 
@@ -12,7 +14,7 @@
 
 | # | 区域 | 组件 | 规则 |
 |---|---|---|---|
-| 1 | 标题区 | `PageHeader` | 标题左,主操作按钮右;"新增"是主操作,放这里,不放表格上方 |
+| 1 | 标题区 | `PageHeader` | 标题左,主操作按钮右;"新增"是主操作,放这里,不放表格上方。简单页面可用兼容的 `actions`;有两组动作时用 `primaryActions`/`secondaryActions` |
 | 2 | 搜索区 | `FilterBar` + `FilterField` | 白色卡片;字段固定宽度靠左排,"重置/查询"靠右;输入框内回车触发查询;可以没有 |
 | 3 | 批量编辑区 | `DataTable` 的 `selectable` + `batchActions` | 选中行才出现,位于表格卡片顶部;含"已选 N 项"、批量动作、"清除选择" |
 | 4 | 数据区 | `DataTable` | 表头最后一列放列设置图标;操作列放 `IconButton`;状态/类型用 `Badge` |
@@ -33,6 +35,11 @@
 
 - 标题字号由 `PageHeader` 统一,页面不自己写 `h2`。
 - 没有新增能力的页面(如日志)不传 `actions`。
+- `primaryActions` 放新增、保存、提交等主要动作;`secondaryActions` 放刷新、导出、同步等辅助动作。
+- 两组动作同时存在时,由 `PageHeader` 自动渲染分隔线;业务页不要自己拼竖线或用空白模拟分组。
+- 旧页面可以继续使用 `actions`,它等价于主动作组;新页面需要分组时优先使用 `primaryActions`/`secondaryActions`。
+- 辅助动作数量过多、权限状态复杂或窄屏无法保持清晰顺序时,业务页才自行选择下拉菜单;不要默认把辅助动作折叠。
+- **范围边界:**列表页默认只展示列表、筛选、批量动作、分页和页面级工具。除非需求明确要求,不得增加“按 ID 查看”、按 ID 查询卡片、详情卡片、列表内展开详情、列表下方详情面板或额外的 ID 输入区块。
 
 ### 1.2 搜索区
 
@@ -49,6 +56,7 @@
 - 每个控件要有 `aria-label` 或 `placeholder`,两者至少一个。
 - 筛选必须由后端完成,接口接收查询参数;日志类列表必须后端分页筛选,禁止取固定最近 N 条再前端过滤。
 - 搜索项少时不要拉满整行:`FilterField` 默认 192px,超出自动换行。
+- 只有需求明确要求按 ID 精确筛选时,才增加 ID 筛选字段;这属于搜索区的一项后端筛选,不是额外的“按 ID 查看”区块。
 
 ### 1.3 批量编辑区
 
@@ -117,6 +125,15 @@
 - 页面挂在 `KeepAliveOutlet` 里,切换页签时保留筛选、分页和滚动位置。
 - 需要"回到页签时刷新"的列表(日志)调用 `useOnTabActivate(() => void reload())`。
 - 实时、轮询类页面在 `createApp({ keepAliveExclude: ['/path'] })` 里登记,离开页签就卸载。
+
+### 1.8 请求状态、重复提交与竞态
+
+- 列表首次加载用 `Spinner`/`Skeleton`,加载失败用 `Alert`;不要在页面里手写错误 `<p>`。
+- 查询、重置、翻页、批量操作和保存期间,相关按钮必须 disabled,避免重复提交。
+- 筛选、翻页或排序改变后,旧请求返回不能覆盖较新的列表结果;用请求序号、AbortController 或现有数据层机制保证结果只提交给当前查询。
+- 保存/删除/批量操作成功后统一刷新受影响列表;失败时保留表单输入、筛选状态和必要的弹窗上下文。
+- 服务端 5xx 或数据库错误只显示通用失败文案,不要把 `err.message`、SQL、堆栈或内部错误原文直接显示给用户;只有明确的业务校验错误才显示具体提示。
+- 列表空状态只在请求成功且确实没有数据时显示;加载中或失败时不要同时显示“暂无数据”。
 
 ## 2. 弹窗型新建/编辑
 
@@ -196,9 +213,9 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 
 - 路径约定:列表 `/orders`,新建 `/orders/new`,编辑 `/orders/:id/edit`。
 - 通过 `createApp({ extraRoutes })` 注入 `<Route>`;二开项目在 `frontend/src/pages/` 下放页面。
-- 页签只在点击侧栏菜单项时创建(`sidebar.tsx` 的 `addTab`),`extraRouteLabels` 只覆盖已有页签的标题。`/orders/new`、`/orders/:id/edit` 这类不在菜单里的路径,**基座目前不会为它们建页签**,二开落地时要自行验证页签显示与关闭行为,必要时扩展 `tabs-context`。
-- 侧栏菜单只登记列表页;新建/编辑页从列表页的按钮跳转(`navigate`),不单独做菜单项。
+- 侧栏菜单只登记列表页;新建/编辑页从列表页的按钮跳转(`navigate`),不单独做菜单项。深链接进入已授权的二开路径时,页签系统应保留该路径对应的页面;二开仍需通过 `extraRouteLabels` 或 `RouteLabelsContext` 提供完整路径的标题,并验证关闭、刷新和返回行为。
 - 带参数路径不会在侧栏高亮定位菜单(基座既有行为)。
+- 不要把每个详情路径都注册成侧栏菜单;菜单授权控制入口可见性,接口仍必须单独鉴权。
 
 ### 3.2 页面结构
 
@@ -216,6 +233,7 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - 保存成功后返回列表,并让列表刷新:列表页用 `useOnTabActivate` 重新加载,或保存后直接导航回列表后由列表在挂载时加载。
 - 有未保存修改时离开要拦截提示,用 `ConfirmDialog`。
 - 一个路径对应一个页签,同一条记录的编辑页重复打开会复用页签;不同记录是不同路径,会各自开页签。表单状态随页签保留(keep-alive),关闭页签才丢弃,这点要在文案或交互上让用户有预期。
+- 只有需求明确要求时才提供详情页或详情路径;“编辑”不自动意味着要再增加“查看”页面。
 - 表单字段控件、必填、只读、错误规则与弹窗相同(见 2.2)。
 
 ### 3.4 弹窗还是页面
@@ -236,11 +254,90 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - 错误用 `Alert`(错误自动 `role=alert`),成功和提示用 `variant` 区分。
 - 操作后的轻反馈(如"已复制")用 `useToast`;表单字段错误仍然用 `Alert`,不要用 toast。
 
-## 5. 新页面检查清单
+## 5. 二开边界与接口约定
+
+### 5.1 二开扩展边界
+
+- 二开业务后端放在二开项目自身的 `internal/` 或公开业务包中,只能通过底座公开的 `go-nx-admin/app` 接口接入;不要 import 底座 `backend/internal/`。
+- 业务 API 通过 `app.Options.ExtraRoutes` 注入;公开接口才使用 `ExtraPublicRoutes`,不要为了省事绕过 JWT/Casbin。
+- 新增业务权限同时维护 `ExtraPermissions` 与 `ExtraPermissionExpand`;权限 key 使用 `资源:操作`,路径参数使用 `[^/]+`。
+- 前端业务资源、路由和标题通过 `createApp({ extraResources, extraRoutes, extraRouteLabels })` 注入;业务页面放在二开项目自己的 `frontend/src/pages/`。
+- 菜单可见性不等于接口授权。列表页隐藏某个按钮不能替代后端权限检查,后端每个读写接口都必须独立鉴权。
+- 删除或修改路由、权限 key、资源名时,同步检查菜单、权限定义、权限展开、前端资源和页签标题,不要只改一层。
+
+### 5.2 推荐 API 响应结构
+
+二开列表接口优先使用与 `DataTable`/data provider 对齐的结构:
+
+```json
+{
+  "data": [],
+  "total": 100
+}
+```
+
+- 服务端分页列表返回 `data` 和 `total`;`total` 是当前筛选条件下的总数。
+- 一次性返回的角色、菜单等小列表只返回 `data`,页面不传分页参数。
+- 详情接口返回单个对象;只有需求明确需要详情页面或详情弹窗时才提供,不要因有 `id` 字段自动增加“按 ID 查看”入口。
+- 新建、编辑成功后返回已保存对象或明确的成功状态,不要让页面猜测响应结构。
+- 批量操作返回逐 ID 的成功/失败结果,页面据此清理成功选中项并展示失败汇总;不要把部分失败伪装成全成功。
+- 错误响应遵循底座通用错误策略:内部原因写日志,响应不回显数据库、驱动或堆栈信息;业务校验错误才返回可操作的业务文案。
+
+### 5.3 二开 CRUD 最小模板
+
+新建二开列表页可按下面的骨架开始,再按需求删减区域;不要在骨架之外自行增加“按 ID 查看”区块:
+
+```tsx
+<div className="space-y-4">
+  <PageHeader
+    title={t('orders.title')}
+    primaryActions={
+      <Button size="sm" onClick={openCreate}>
+        {t('orders.create')}
+      </Button>
+    }
+    secondaryActions={
+      <Button size="sm" variant="outline" onClick={reload} disabled={loading}>
+        {t('common.refresh')}
+      </Button>
+    }
+  />
+
+  {error && <Alert>{error}</Alert>}
+
+  <FilterBar onQuery={applyFilters} onReset={resetFilters}>
+    <FilterField>
+      <Input aria-label={t('orders.keyword')} value={filters.keyword} onChange={...} />
+    </FilterField>
+  </FilterBar>
+
+  <DataTable
+    storageKey="orders"
+    columns={columns}
+    data={items}
+    page={page}
+    pageSize={pageSize}
+    total={total}
+    onPageChange={setPage}
+    selectable
+    selectedKeys={selected}
+    onSelectionChange={setSelected}
+    batchActions={batchActions}
+    stickyEnd={1}
+  />
+</div>
+```
+
+- `columns` 中操作列使用 `IconButton`,状态使用 `Badge`,操作列设置 `required: true`。
+- 批量动作使用 `useBatch`;详情、编辑和删除是否存在必须由需求决定,不能因为列表有 `id` 就默认加入查看按钮。
+- 新增、编辑和删除分别遵循第 2 节;字段较多时才升级为第 3 节的独立页面。
+
+## 6. 新页面检查清单
 
 提交前对照:
 
 - [ ] 页头用 `PageHeader`,没有自己写 `h2`。
+- [ ] 主动作和辅助动作分别使用 `primaryActions`/`secondaryActions`;简单旧页面可继续使用 `actions`;没有自己手写分隔线。
 - [ ] 搜索区用 `FilterBar`,筛选在后端完成,"查询/重置/回车"都能用。
 - [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`;有操作列的表设 `stickyEnd={1}`,列多的表按需设 `stickyStart`。
 - [ ] 行内状态用 `Badge`,图标按钮用 `IconButton` 带 `label`。
@@ -251,8 +348,14 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - [ ] 文案五种语言都补了。
 - [ ] 窄屏(约 600px)下搜索区自动换行,表格横向滚动,弹窗不溢出。
 - [ ] 新增权限同时维护 `permissions.go` 定义与展开(见 `AGENTS.md` 权限维护)。
+- [ ] 二开后端只通过公开 `app` 扩展点接入,前端通过 `createApp` 扩展点接入,没有 import 底座 `backend/internal/`。
+- [ ] 列表接口遵循 `data`/`total` 约定;批量接口能表达逐 ID 的部分失败。
+- [ ] 保存、删除、批量和查询期间防重复提交,旧请求不会覆盖新查询结果。
+- [ ] 5xx/数据库错误没有直接展示内部错误原文。
+- [ ] 没有需求时没有增加“按 ID 查看”、详情卡片、列表内详情展开或额外详情区块。
+- [ ] 只有需求明确要求时才增加详情页、查看按钮或 ID 精确筛选;三者不能互相推导。
 
-## 6. 现有页面对照
+## 7. 现有页面对照
 
 | 页面 | 搜索区 | 批量 | 分页 | 编辑方式 | 粘性列 |
 |---|---|---|---|---|---|
