@@ -90,6 +90,9 @@ export const I18nProvider: React.FC<{ children: React.ReactNode; options?: I18nO
   const routeLabel = useCallback((path: string, fallback: string) => {
     const override = options?.messages?.[locale]?.[`routes.${path}`]
     if (override !== undefined) return override
+    // Menu groups have no route path; let extensions translate their fallback label.
+    const fallbackOverride = options?.messages?.[locale]?.[fallback]
+    if (fallbackOverride !== undefined) return fallbackOverride
     const key = routeKeys[path] ?? (fallback === '后台管理' ? 'sidebar.backend' : fallback === '系统管理' ? 'sidebar.system' : undefined)
     return key ? t(key) : fallback
   }, [locale, options?.messages, t])
