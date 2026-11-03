@@ -19,7 +19,7 @@
 | 3 | 批量编辑区 | `DataTable` 的 `selectable` + `batchActions` | 选中行才出现,位于表格卡片顶部;含"已选 N 项"、批量动作、"清除选择" |
 | 4 | 数据区 | `DataTable` | 表头最后一列放列设置图标;操作列放 `IconButton`;状态/类型用 `Badge` |
 | 5 | 分页工具条 | `DataTable` 的 `page`/`pageSize`/`total`/`onPageChange` | 左侧总数,右侧页码;没传 `total` 则不显示 |
-| 6 | 扩展工具按钮 | `DataTable` 的 `toolbar` | 导出、同步等页面级附加动作,右对齐,位于表格上方;没有就不传 |
+| 6 | 扩展工具按钮 | `DataTable` 的 `toolbar` | 表格专属附加动作(如按当前列为粒度的导出、表格内同步),右对齐,位于表格上方;页面级刷新/导出/上传等辅助动作按 1.1 放 `secondaryActions`;没有就不传 |
 
 加载失败的提示用 `Alert`,放在标题区和搜索区之间。
 
@@ -116,6 +116,7 @@
 
 ### 1.6 扩展工具按钮
 
+- 只放**表格专属**的附加动作(如按当前列为粒度的导出、表格内同步);页面级的刷新、导出、上传、备份等辅助动作按 1.1 放 `PageHeader.secondaryActions`,不要放在这里。
 - 放在 `toolbar`,出现在表格上方右侧。
 - 导出用 `ExportButton`(组件已提供,基座页面暂无使用实例);其他按钮用 `Button size="sm" variant="outline"`。
 - 它是整张表的动作,不依赖选中行;依赖选中行的动作放批量编辑区。
@@ -338,6 +339,7 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 
 - [ ] 页头用 `PageHeader`,没有自己写 `h2`。
 - [ ] 主动作和辅助动作分别使用 `primaryActions`/`secondaryActions`;简单旧页面可继续使用 `actions`;没有自己手写分隔线。
+- [ ] 页面级刷新/导出/上传/备份在 `PageHeader.secondaryActions`,`DataTable.toolbar` 只放表格专属附加动作。
 - [ ] 搜索区用 `FilterBar`,筛选在后端完成,"查询/重置/回车"都能用。
 - [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`;有操作列的表设 `stickyEnd={1}`,列多的表按需设 `stickyStart`。
 - [ ] 行内状态用 `Badge`,图标按钮用 `IconButton` 带 `label`。
