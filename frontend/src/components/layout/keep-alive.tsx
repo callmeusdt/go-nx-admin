@@ -64,7 +64,7 @@ export const KeepAliveOutlet: React.FC = () => {
       {[...panes.current.entries()].map(([key, { element, version }]) => {
         const active = key === pathname
         return (
-          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto p-3 sm:p-6">
+          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto p-3 sm:p-4">
             <ActiveContext.Provider value={active}>{element}</ActiveContext.Provider>
           </div>
         )

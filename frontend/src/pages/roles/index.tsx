@@ -188,7 +188,7 @@ export const RolesPage: React.FC = () => {
   }, {})
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title={t('roles.title')} actions={<Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t('roles.create')}</Button>} />
       {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 

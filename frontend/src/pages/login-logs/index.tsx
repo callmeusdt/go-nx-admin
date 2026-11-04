@@ -60,7 +60,7 @@ export const LoginLogsPage: React.FC = () => {
   useOnTabActivate(() => { void load(page) })
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title={t('login_logs.title')} />
       {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
       <FilterBar

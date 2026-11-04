@@ -56,7 +56,7 @@ export const ApisPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title={t('apis.title')} />
       {error && <Alert>{error}</Alert>}
       <div className="bg-white rounded-lg border border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

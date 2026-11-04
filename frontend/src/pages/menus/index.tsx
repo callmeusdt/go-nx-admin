@@ -139,7 +139,7 @@ export const MenusPage: React.FC = () => {
   if (loading) return <Spinner label={t('common.loading')} />
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title={t('menus.title')} actions={<Button size="sm" onClick={() => openCreate()}><Plus aria-hidden="true" className="w-4 h-4 mr-1" />{t('menus.create')}</Button>} />
       {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 

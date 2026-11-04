@@ -83,7 +83,7 @@ export const MediaPage: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         title={t('media.title')}
         actions={

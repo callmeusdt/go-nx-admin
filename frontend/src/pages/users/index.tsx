@@ -176,7 +176,7 @@ export const UsersPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title={t('users.title')} actions={<Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t('users.create')}</Button>} />
       {loadFailed && <Alert>{t('ui.request_failed')}</Alert>}
 
