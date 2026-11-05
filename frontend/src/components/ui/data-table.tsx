@@ -37,6 +37,8 @@ export interface DataTableProps<T> {
   pageSize?: number
   total?: number
   onPageChange?: (page: number) => void
+  /** Additional controls rendered in the pagination footer, beside the page navigation. */
+  paginationToolbar?: React.ReactNode
 
   sort?: SortState | null
   onSortChange?: (sort: SortState | null) => void
@@ -88,7 +90,7 @@ function readHidden(storageKey?: string): string[] | null {
 export function DataTable<T>(props: DataTableProps<T>) {
   const {
     columns, rows, rowKey, loading, emptyText, minWidth = 720,
-    page = 1, pageSize = 20, total, onPageChange,
+    page = 1, pageSize = 20, total, onPageChange, paginationToolbar,
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
@@ -333,7 +335,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
       {total !== undefined && onPageChange && (
         <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
           <span>{t('logs.total').replace('{total}', String(total))}</span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {paginationToolbar}
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => onPageChange(page - 1)}>{t('logs.previous')}</Button>
             <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
             <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => onPageChange(page + 1)}>{t('logs.next')}</Button>
