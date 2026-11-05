@@ -37,6 +37,8 @@ export interface DataTableProps<T> {
   pageSize?: number
   total?: number
   onPageChange?: (page: number) => void
+  /** Additional controls rendered in the pagination footer, beside the page navigation. */
+  paginationToolbar?: React.ReactNode
 
   sort?: SortState | null
   onSortChange?: (sort: SortState | null) => void
@@ -90,7 +92,7 @@ function readHidden(storageKey?: string): string[] | null {
 export function DataTable<T>(props: DataTableProps<T>) {
   const {
     columns, rows, rowKey, loading, emptyText, minWidth = 720,
-    page = 1, pageSize = 20, total, onPageChange,
+    page = 1, pageSize = 20, total, onPageChange, paginationToolbar,
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
