@@ -3,20 +3,38 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useTabs } from '../../contexts/tabs-context'
 import { useHomePath } from '../../dashboard/context'
 import {
+  Activity,
+  Bookmark,
+  Building2,
   ChevronDown,
   ChevronRight,
   Circle,
+  Code2,
+  FileCode2,
   FileText,
+  Image,
+  Keyboard,
+  KeyRound,
   LayoutDashboard,
   LayoutPanelLeft,
+  ListChecks,
   LogIn,
   Menu as MenuIcon,
+  Package,
+  Receipt,
   Route,
-  Shield,
-  Users,
+  ScanText,
+  Server,
   Settings,
-  Image,
+  Shield,
   SlidersHorizontal,
+  Smartphone,
+  Terminal,
+  Trash2,
+  UserCog,
+  Users,
+  Wallet,
+  Wrench,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Menu } from '../../types'
@@ -30,22 +48,43 @@ interface MenuItem {
   children?: MenuItem[]
 }
 
+// 菜单图标名与 lucide-react 导出一一对应；未登记的图标回退 Circle。
+// 新增菜单图标时在此显式 import + 登记，保证 tree-shaking，不整包引入 lucide。
+const menuIconMap: Record<string, React.FC<{ className?: string }>> = {
+  Activity,
+  Bookmark,
+  Building2,
+  Circle,
+  Code2,
+  FileCode2,
+  FileText,
+  Image,
+  Keyboard,
+  KeyRound,
+  LayoutDashboard,
+  LayoutPanelLeft,
+  ListChecks,
+  LogIn,
+  Menu: MenuIcon,
+  Package,
+  Receipt,
+  Route,
+  ScanText,
+  Server,
+  Settings,
+  Shield,
+  Sliders: SlidersHorizontal,
+  Smartphone,
+  Terminal,
+  Trash2,
+  UserCog,
+  Users,
+  Wallet,
+  Wrench,
+}
+
 const IconComponent = ({ name, className }: { name: string; className?: string }) => {
-  const iconMap: Record<string, React.FC<{ className?: string }>> = {
-    Circle,
-    FileText,
-    LayoutDashboard,
-    LayoutPanelLeft,
-    LogIn,
-    Menu: MenuIcon,
-    Route,
-    Shield,
-    Users,
-    Settings,
-    Image,
-    Sliders: SlidersHorizontal,
-  }
-  const Icon = iconMap[name] || Circle
+  const Icon = menuIconMap[name] || Circle
   return Icon ? <Icon className={className || 'w-4 h-4'} /> : null
 }
 
