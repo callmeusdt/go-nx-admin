@@ -335,7 +335,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
       {total !== undefined && onPageChange && (
         <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
           <span>{t('logs.total').replace('{total}', String(total))}</span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             {paginationToolbar}
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => onPageChange(page - 1)}>{t('logs.previous')}</Button>
             <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
