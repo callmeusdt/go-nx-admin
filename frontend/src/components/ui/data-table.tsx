@@ -262,7 +262,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   <th
                     key={col.key}
                     aria-sort={active ? (sort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
-                    className={`text-left px-4 py-3 font-medium text-gray-600 ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
+                    className={`text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
                     style={pinStyle(pin)}
                   >
                     {sortable ? (
