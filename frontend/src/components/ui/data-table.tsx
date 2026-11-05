@@ -63,6 +63,8 @@ export interface DataTableProps<T> {
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
   toolbar?: React.ReactNode
+  /** Custom controls rendered beside the server-side pagination controls. */
+  paginationToolbar?: React.ReactNode
 }
 
 interface PinInfo { side: 'left' | 'right'; offset: number; edge: boolean }
@@ -92,7 +94,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
-    storageKey, toolbar,
+    storageKey, toolbar, paginationToolbar,
   } = props
   const { t } = useI18n()
 
@@ -260,7 +262,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   <th
                     key={col.key}
                     aria-sort={active ? (sort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
-                    className={`text-left px-4 py-3 font-medium text-gray-600 ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
+                    className={`text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
                     style={pinStyle(pin)}
                   >
                     {sortable ? (
@@ -333,7 +335,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
       {total !== undefined && onPageChange && (
         <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
           <span>{t('logs.total').replace('{total}', String(total))}</span>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+            {paginationToolbar}
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => onPageChange(page - 1)}>{t('logs.previous')}</Button>
             <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
             <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => onPageChange(page + 1)}>{t('logs.next')}</Button>

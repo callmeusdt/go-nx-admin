@@ -129,6 +129,12 @@
 - 导出用 `ExportButton`(组件已提供,基座页面暂无使用实例);其他按钮用 `Button size="sm" variant="outline"`。
 - 它是整张表的动作,不依赖选中行;依赖选中行的动作放批量编辑区。
 
+### 1.6.1 分页专属扩展
+
+- 需要在分页控件旁增加每页大小、视图切换或分页范围等控件时,使用 `DataTable.paginationToolbar`。
+- `paginationToolbar` 只放分页语境内的控件;刷新、导出、上传、备份等页面级动作仍放 `PageHeader.secondaryActions`。
+- 分页扩展与上一页/页码/下一页控件保持同一行;组件会保持分页控件不换行,页面不要自行复制分页 footer。
+
 ### 1.7 页签与刷新
 
 - 页面挂在 `KeepAliveOutlet` 里,切换页签时保留筛选、分页和滚动位置。
@@ -348,6 +354,7 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - [ ] 页头用 `PageHeader`,没有自己写 `h2`。
 - [ ] 主动作和辅助动作分别使用 `primaryActions`/`secondaryActions`;简单旧页面可继续使用 `actions`;没有自己手写分隔线。
 - [ ] 页面级刷新/导出/上传/备份在 `PageHeader.secondaryActions`,`DataTable.toolbar` 只放表格专属附加动作。
+- [ ] 分页语境内的自定义控件使用 `DataTable.paginationToolbar`,没有复制或重写分页 footer。
 - [ ] 搜索区用 `FilterBar`,筛选在后端完成,"查询/重置/回车"都能用。
 - [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`;有操作列的表设 `stickyEnd={1}`,列多的表按需设 `stickyStart`。
 - [ ] 行内状态用 `Badge`,图标按钮用 `IconButton` 带 `label`。
