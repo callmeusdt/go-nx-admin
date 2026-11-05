@@ -65,8 +65,6 @@ export interface DataTableProps<T> {
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
   toolbar?: React.ReactNode
-  /** Custom controls rendered beside the server-side pagination controls. */
-  paginationToolbar?: React.ReactNode
 }
 
 interface PinInfo { side: 'left' | 'right'; offset: number; edge: boolean }
@@ -96,7 +94,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
-    storageKey, toolbar, paginationToolbar,
+    storageKey, toolbar,
   } = props
   const { t } = useI18n()
 
