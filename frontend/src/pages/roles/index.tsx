@@ -213,7 +213,7 @@ export const RolesPage: React.FC = () => {
           { key: 'type', title: t('roles.type'), label: t('roles.type'), render: r => r.is_system ? (
             <Badge variant="warning"><Shield className="w-3 h-3" />{t('roles.system')}</Badge>
           ) : <span className="text-xs text-gray-400">{t('roles.custom')}</span> },
-          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: r => (
+          { key: 'actions', title: t('common.actions'), required: true, align: 'right', render: r => (
             <div className="flex items-center justify-end gap-1">
               <IconButton tone="success" label={t(r.is_system ? 'roles.system_menus' : 'roles.menu_grants')} disabled={r.is_system} onClick={() => openMenuDialog(r)}><MenuIcon className="w-4 h-4" /></IconButton>
               <IconButton tone="primary" label={t(r.is_system ? 'roles.system_permissions' : 'roles.permissions')} disabled={r.is_system} onClick={() => openPolicyDialog(r)}><Route className="w-4 h-4" /></IconButton>

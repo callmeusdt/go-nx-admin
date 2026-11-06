@@ -11,7 +11,10 @@ const Fixture: React.FC = () => (
   <I18nProvider>
     <main>
       <DataTable
-        columns={[{ key: 'name', title: 'A very long column heading that must stay together', required: true }]}
+        columns={[
+          { key: 'name', title: 'A very long column heading that must stay together', required: true },
+          { key: 'actions', title: 'Actions', required: true, align: 'center', render: () => <button type="button">Action</button> },
+        ]}
         rows={rows}
         rowKey={row => row.id}
         page={1}

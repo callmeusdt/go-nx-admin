@@ -171,7 +171,7 @@ export const MenusPage: React.FC = () => {
           { key: 'permission', title: t('menus.permission'), label: t('menus.permission'), render: m => <Badge className="font-mono">{m.permission || '-'}</Badge> },
           { key: 'icon', title: t('menus.icon'), label: t('menus.icon'), className: 'text-gray-500 text-xs', render: m => m.icon || '-' },
           { key: 'sort', title: t('menus.sort'), label: t('menus.sort'), className: 'text-gray-500' },
-          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: m => (
+          { key: 'actions', title: t('common.actions'), required: true, align: 'right', render: m => (
             <div className="flex items-center justify-end gap-1">
               {!m.parent_id && (
                 <IconButton tone="success" label={t('menus.add_child')} onClick={() => openCreate(m.id)}><Plus aria-hidden="true" className="w-4 h-4" /></IconButton>

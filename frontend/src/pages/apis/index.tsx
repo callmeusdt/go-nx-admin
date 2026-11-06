@@ -92,7 +92,7 @@ export const ApisPage: React.FC = () => {
           { key: 'name', title: t('apis.name'), label: t('apis.name'), render: i => nameLabel(i) },
           { key: 'path', title: t('apis.path'), label: t('apis.path'), render: i => <code className="text-xs">{i.path}</code> },
           { key: 'method', title: t('apis.method'), label: t('apis.method'), render: i => <code className="text-xs">{i.method}</code> },
-          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: i => (
+          { key: 'actions', title: t('common.actions'), required: true, align: 'right', render: i => (
             <IconButton tone="danger" label={t('common.delete')} onClick={() => void remove(i.id)}><Trash2 className="w-4 h-4" /></IconButton>
           ) },
         ]}

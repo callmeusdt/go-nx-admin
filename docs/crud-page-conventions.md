@@ -91,6 +91,7 @@
 - 粘性列:宽表用 `stickyStart={n}` 让前 n 列、`stickyEnd={n}` 让后 n 列粘在表格两侧,横向滚动时它们不动,其余列从下面滚过。详见 1.4.1。
 - 行内状态一律 `Badge`:启用 `success`、禁用 `danger`、分类 `info`、系统内置 `warning`、其他 `neutral`;在线状态用 `shape="pill"`。
 - 行内操作用 `IconButton`,传 `label`(悬浮提示和无障碍名称)和 `tone`:编辑 `primary`、删除 `danger`、授权类 `success`/`primary`、其他默认。
+- 列级水平对齐使用 `DataTableColumn.align` (`left`/`center`/`right`),同时作用于表头和单元格;操作列按需要传 `align: 'center'` 或 `align: 'right'`,不要在 `render` 中重复包对齐容器或使用 `!important` 覆盖默认样式。
 - 不可执行的操作保持显示并 `disabled`,提示文字说明原因(如"不能删除当前登录账户"),不要隐藏。
 - 空数据传 `emptyText`,默认文案 `common.no_data`。
 - 树形数据(如菜单)用同一个 `DataTable`,缩进放在名称列的 `render` 里,不另写 `<table>`。

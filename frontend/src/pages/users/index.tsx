@@ -253,7 +253,7 @@ export const UsersPage: React.FC = () => {
             </div>
           ) },
           { key: 'created_at', title: t('users.created_at'), label: t('users.created_at'), className: 'text-gray-500 text-xs', render: u => new Date(u.created_at).toLocaleDateString(locale) },
-          { key: 'actions', title: t('common.actions'), required: true, headerClassName: 'text-right', className: 'text-right', render: u => (
+          { key: 'actions', title: t('common.actions'), required: true, align: 'right', render: u => (
             <div className="flex items-center justify-end gap-1">
               <IconButton tone="primary" label={t('users.edit')} onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></IconButton>
               <IconButton tone="primary" label={t('users.ip_whitelist')} onClick={() => openIPWhitelist(u)}><Shield className="w-4 h-4" /></IconButton>

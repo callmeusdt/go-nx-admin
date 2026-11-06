@@ -5,6 +5,7 @@ import { Button } from './button'
 import { Checkbox } from './checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Tooltip } from './tooltip'
+import { cn } from '../../lib/utils'
 
 export type SortOrder = 'asc' | 'desc'
 export interface SortState { field: string; order: SortOrder }
@@ -22,6 +23,8 @@ export interface DataTableColumn<T> {
   required?: boolean
   className?: string
   headerClassName?: string
+  /** Horizontal alignment shared by the column header and cell content. */
+  align?: 'left' | 'center' | 'right'
 }
 
 export interface DataTableProps<T> {
@@ -65,13 +68,16 @@ export interface DataTableProps<T> {
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
   toolbar?: React.ReactNode
-  /** Custom controls rendered beside the server-side pagination controls. */
-  paginationToolbar?: React.ReactNode
 }
 
 interface PinInfo { side: 'left' | 'right'; offset: number; edge: boolean }
 
 const clampCount = (n: number | undefined, max: number) => Math.max(0, Math.min(Math.floor(n ?? 0) || 0, max))
+
+const alignClasses = (align: DataTableColumn<unknown>['align'] = 'left') => ({
+  header: { left: 'text-left', center: 'text-center', right: 'text-right' }[align],
+  cell: { left: 'justify-start', center: 'justify-center', right: 'justify-end' }[align],
+})
 
 // Sticky cells need an opaque background or the cells scrolling underneath show
 // through. These match the row states: default, hover, and selected.
@@ -96,7 +102,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     sort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
-    storageKey, toolbar, paginationToolbar,
+    storageKey, toolbar,
   } = props
   const { t } = useI18n()
 
@@ -264,7 +270,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   <th
                     key={col.key}
                     aria-sort={active ? (sort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
-                    className={`text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap ${pin ? 'z-20 bg-gray-50' : ''} ${col.headerClassName ?? ''}`}
+                    className={cn(
+                      'px-4 py-3 font-medium text-gray-600 whitespace-nowrap',
+                      alignClasses(col.align).header,
+                      pin ? 'z-20 bg-gray-50' : '',
+                      col.headerClassName,
+                    )}
                     style={pinStyle(pin)}
                   >
                     {sortable ? (
@@ -311,10 +322,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
                     return (
                       <td
                         key={col.key}
-                        className={`px-4 py-2.5 ${pin ? `z-10 ${checked ? PIN_BG_SELECTED : PIN_BG}` : ''} ${col.className ?? ''}`}
+                        className={cn(
+                          'px-4 py-2.5',
+                          alignClasses(col.align).header,
+                          pin ? `z-10 ${checked ? PIN_BG_SELECTED : PIN_BG}` : '',
+                          col.className,
+                        )}
                         style={pinStyle(pin)}
                       >
-                        {col.render ? col.render(row, i) : String((row as Record<string, unknown>)[col.key] ?? '')}
+                        <div className={cn('flex items-center', alignClasses(col.align).cell)}>
+                          {col.render ? col.render(row, i) : String((row as Record<string, unknown>)[col.key] ?? '')}
+                        </div>
                       </td>
                     )
                   })}
