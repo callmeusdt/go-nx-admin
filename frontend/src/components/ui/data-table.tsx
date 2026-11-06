@@ -43,7 +43,10 @@ export interface DataTableProps<T> {
   /** Additional controls rendered in the pagination footer, beside the page navigation. */
   paginationToolbar?: React.ReactNode
 
+  /** Controlled sort state. When omitted, the table manages sort state from `defaultSort`. */
   sort?: SortState | null
+  /** Initial sort field and direction for uncontrolled sorting. */
+  defaultSort?: SortState | null
   onSortChange?: (sort: SortState | null) => void
 
   /** Enables the checkbox column. */
@@ -99,12 +102,14 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const {
     columns, rows, rowKey, loading, emptyText, minWidth = 720,
     page = 1, pageSize = 20, total, onPageChange, paginationToolbar,
-    sort, onSortChange,
+    sort, defaultSort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
     storageKey, toolbar,
   } = props
   const { t } = useI18n()
+  const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort ?? null)
+  const currentSort = sort === undefined ? internalSort : sort
 
   const [hidden, setHidden] = useState<string[]>(() =>
     readHidden(storageKey) ?? columns.filter(c => c.defaultVisible === false).map(c => c.key))
@@ -140,9 +145,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   const nextSort = (field: string) => {
     if (!onSortChange) return
-    if (sort?.field !== field) onSortChange({ field, order: 'asc' })
-    else if (sort.order === 'asc') onSortChange({ field, order: 'desc' })
-    else onSortChange(null)
+    const next = currentSort?.field !== field
+      ? { field, order: 'asc' as const }
+      : currentSort.order === 'asc'
+        ? { field, order: 'desc' as const }
+        : null
+    if (sort === undefined) setInternalSort(next)
+    onSortChange(next)
   }
 
   const nStart = clampCount(stickyStart, visible.length)
@@ -263,13 +272,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
                 </th>
               )}
               {visible.map((col, colIndex) => {
-                const active = sort?.field === col.key
+                const active = currentSort?.field === col.key
                 const sortable = col.sortable && !!onSortChange
                 const pin = pinInfo(colIndex + selOffset)
                 return (
                   <th
                     key={col.key}
-                    aria-sort={active ? (sort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
+                    aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
                     className={cn(
                       'px-4 py-3 font-medium text-gray-600 whitespace-nowrap',
                       alignClasses(col.align).header,
@@ -283,11 +292,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
                         type="button"
                         onClick={() => nextSort(col.key)}
                         className="inline-flex items-center gap-1 hover:text-gray-900"
-                        title={active ? t(sort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : undefined}
+                        title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}
                       >
                         {col.title}
                         {active
-                          ? (sort!.order === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)
+                          ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />)
                           : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
                       </button>
                     ) : col.title}

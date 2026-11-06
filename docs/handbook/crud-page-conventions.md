@@ -87,6 +87,53 @@
 ### 1.4 数据区
 
 - 列定义用 `DataTableColumn`:`title` 是表头,`label` 是列设置里显示的纯文本,`required: true` 的列(通常是"操作")不可被隐藏。
+- 只有字段具备稳定、明确且对用户有价值的排序语义时才启用排序;不要因为列是数字、日期或存在数据库字段就默认加排序。
+- 启用排序时,列设置 `sortable: true`,表格传入 `sort`/`defaultSort` 和 `onSortChange`;只在真实可排序的列上显示排序图标。操作列、富文本、状态 Badge、拼接展示列和无稳定顺序的计算列默认不排序。
+- `sort` 用于受控排序状态,适合服务端分页和后端排序;`defaultSort` 只用于初始化默认字段和方向,适合页面首次加载时带上默认排序。默认方向显式写成 `{ field: 'created_at', order: 'desc' }`,不要依赖后端隐式默认值。
+- 排序图标和交互由 `DataTable` 统一提供,业务页面不要在表头自行放箭头或按钮。点击顺序为无排序 → 升序 → 降序 → 清除,并通过 `aria-sort` 暴露当前状态。
+- 服务端分页或数据量较大的列表必须由后端执行排序;前端只提交白名单字段和 `asc`/`desc`,不能把请求中的排序字段直接拼接 SQL。排序字段必须映射到固定数据库列或安全表达式。
+- 排序与筛选、分页联动时回到第 1 页;切换筛选条件或排序条件后,旧请求不能覆盖新结果。后端不支持排序时不要显示排序图标。
+
+#### 1.4.1 排序接入模板
+
+```tsx
+const [sort, setSort] = useState<SortState | null>(null)
+
+const load = async (nextSort = sort) => {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (nextSort) {
+    params.set('sort', nextSort.field)
+    params.set('order', nextSort.order)
+  }
+  const response = await api.get(`/orders?${params}`)
+  setRows(response.data)
+  setTotal(response.total)
+}
+
+<DataTable
+  columns={[
+    { key: 'name', title: t('orders.name'), sortable: true },
+    { key: 'created_at', title: t('orders.created_at'), sortable: true },
+    { key: 'actions', title: t('common.actions'), required: true, align: 'right' },
+  ]}
+  sort={sort}
+  onSortChange={next => {
+    setSort(next)
+    setPage(1)
+    void load(next)
+  }}
+  rows={rows}
+  rowKey={row => row.id}
+  page={page}
+  pageSize={pageSize}
+  total={total}
+  onPageChange={nextPage => { setPage(nextPage); void load(sort) }}
+/>
+```
+
+- `sort.field` 必须是前端列 key 与后端白名单之间的映射结果;不要直接信任任意请求字段。
+- 如果 API 使用 `sort_by`/`direction` 等其他参数,在页面 provider 或请求适配层统一转换,不要让每个列表自行发明一套参数。
+- 对一次性小列表,可以在前端排序,但仍应只对明确允许排序的列显示 `sortable`;不要对权限、操作和展示拼接列排序。
 - 给每张表一个稳定的 `storageKey`,列设置选择会存到本地。
 - 粘性列:宽表用 `stickyStart={n}` 让前 n 列、`stickyEnd={n}` 让后 n 列粘在表格两侧,横向滚动时它们不动,其余列从下面滚过。详见 1.4.1。
 - 行内状态一律 `Badge`:启用 `success`、禁用 `danger`、分类 `info`、系统内置 `warning`、其他 `neutral`;在线状态用 `shape="pill"`。
@@ -358,6 +405,9 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - [ ] 分页语境内的自定义控件使用 `DataTable.paginationToolbar`,没有复制或重写分页 footer。
 - [ ] 搜索区用 `FilterBar`,筛选在后端完成,"查询/重置/回车"都能用。
 - [ ] 列表用 `DataTable`,有 `storageKey`,列设置能用,操作列 `required`;有操作列的表设 `stickyEnd={1}`,列多的表按需设 `stickyStart`。
+- [ ] 排序只在业务有稳定排序语义且后端/数据源真实支持时启用;使用 `sortable` + 受控 `sort`/`onSortChange`,没有自绘排序图标。
+- [ ] 服务端排序字段经过白名单映射,排序方向只允许 `asc`/`desc`,没有把请求字段直接拼接 SQL。
+- [ ] 排序与筛选、分页联动时回到第 1 页,旧请求不会覆盖新排序结果;不支持排序的列没有排序图标。
 - [ ] 行内状态用 `Badge`,图标按钮用 `IconButton` 带 `label`。
 - [ ] 批量操作走 `useBatch`,不可操作的行用 `isRowDisabled`。
 - [ ] 新建/编辑表单用 `FormField`,布尔值用 `Switch`,下拉用 `Select`,勾选用 `Checkbox`。

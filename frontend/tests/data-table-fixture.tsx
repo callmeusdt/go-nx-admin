@@ -12,7 +12,7 @@ const Fixture: React.FC = () => (
     <main>
       <DataTable
         columns={[
-          { key: 'name', title: 'A very long column heading that must stay together', required: true },
+          { key: 'name', title: 'A very long column heading that must stay together', required: true, sortable: true },
           { key: 'actions', title: 'Actions', required: true, align: 'center', render: () => <button type="button">Action</button> },
         ]}
         rows={rows}
@@ -21,6 +21,8 @@ const Fixture: React.FC = () => (
         pageSize={20}
         total={41}
         onPageChange={() => undefined}
+        defaultSort={{ field: 'name', order: 'desc' }}
+        onSortChange={() => undefined}
         paginationToolbar={<button type="button">Custom page control</button>}
       />
       <Dialog open>

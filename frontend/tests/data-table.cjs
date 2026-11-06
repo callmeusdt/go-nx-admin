@@ -13,6 +13,8 @@ if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) throw Error('Loopback fixture req
     await table.waitFor()
     assert.equal(await page.getByRole('button', { name: 'Custom page control' }).count(), 1)
     assert.equal(await page.locator('th').first().evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap')
+    assert.equal(await page.locator('th').first().getAttribute('aria-sort'), 'descending')
+    assert.equal(await page.locator('th').first().locator('svg').getAttribute('aria-label'), 'Descending')
     assert.equal(await page.locator('th').nth(1).evaluate(el => getComputedStyle(el).textAlign), 'center')
     assert.equal(await page.locator('tbody td').nth(1).evaluate(el => getComputedStyle(el).textAlign), 'center')
     assert.equal(await page.locator('tbody td').nth(1).locator('div').evaluate(el => getComputedStyle(el).justifyContent), 'center')
