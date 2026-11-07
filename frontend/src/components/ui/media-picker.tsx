@@ -11,7 +11,7 @@ import { EmptyState } from './empty-state'
 import { Spinner } from './spinner'
 import { Tabs, TabsList, TabsTrigger } from './tabs'
 
-export type MediaPickerValue = Pick<Media, 'id' | 'url' | 'original_name' | 'size' | 'type'>
+export type MediaPickerValue = Pick<Media, 'id' | 'url' | 'original_name' | 'size' | 'type'> & { path?: string }
 
 export interface MediaPickerProps {
   open: boolean

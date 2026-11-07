@@ -404,6 +404,17 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - 选择媒体成功后关闭选择器并回填表单;上传失败保留选择器和表单上下文,显示通用错误文案,避免重复提交。
 - 媒体管理页负责删除、批量操作和全量管理;表单中的媒体选择只负责上传/复用和回填,不要把删除历史媒体混入选择流程。
 
+#### 5.4.1 字段级媒体控件
+
+- 表单媒体字段统一使用 `MediaField`,不要在业务页重复实现预览、选择、更换和清除。
+- `MediaField` 内部复用 `MediaPicker`;业务页只传 `value`、`onChange`、媒体类型和字段标题。
+- 未选择时显示“选择媒体”,已选择时显示“更换媒体”;图片显示缩略图,文件/视频显示类型图标。
+- 清除使用缩略图右上角圆形按钮,必须有 `aria-label`/`title`;清除只修改表单值,不删除媒体库中的历史记录。
+- 预览地址统一通过 `media-url.ts` 的 `normalizeMediaUrl` 归一化,支持 `uploads/...`、`/uploads/...`、`http(s)://...`;未知格式返回无预览占位。
+- `MediaPicker` 的选择弹层层级高于普通 `Dialog`;业务页不要另写临时 `z-index` 或在选择器内部嵌套普通功能弹窗。
+- 业务表单只提交 `media.id`、`media.url` 或明确的业务字段,不要把完整媒体对象未经设计直接序列化进业务模型。
+- `logo`、`icon`、`cover` 等字段名属于二开业务语义,不进入底座组件命名和组件内部逻辑。
+
 ```tsx
 const [pickerOpen, setPickerOpen] = useState(false)
 const [cover, setCover] = useState<MediaPickerValue | null>(null)
