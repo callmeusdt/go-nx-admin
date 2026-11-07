@@ -395,6 +395,32 @@ const [dialog, setDialog] = useState<{ open: boolean; mode: 'create' | 'edit'; i
 - 批量动作使用 `useBatch`;详情、编辑和删除是否存在必须由需求决定,不能因为列表有 `id` 就默认加入查看按钮。
 - 新增、编辑和删除分别遵循第 2 节;字段较多时才升级为第 3 节的独立页面。
 
+### 5.4 表单媒体字段
+
+- 需要上传或复用历史上传文件的表单使用公共 `MediaPicker`,不要在业务页重复实现媒体列表、上传请求或选择弹层。
+- `MediaPicker` 通过 `onSelect(media)` 返回媒体选择值 (`id`、`url`、`original_name`、`size`、`type`);表单按业务需要保存 `media.id`、`media.url` 或其他明确字段,不要把整个对象未经设计直接序列化进业务模型。
+- 通过 `type` 限制允许的媒体类型;图片、视频和普通文件字段不要默认互相混用。上传仍由后端白名单、MIME 嗅探和权限控制决定,前端筛选不是安全边界。
+- 媒体选择器是普通功能弹窗的上层弹层,公共组件使用高于普通 `Dialog` 的层级;业务页不要用低层级容器包住它,也不要在选择器内部再嵌套普通功能弹窗。
+- 选择媒体成功后关闭选择器并回填表单;上传失败保留选择器和表单上下文,显示通用错误文案,避免重复提交。
+- 媒体管理页负责删除、批量操作和全量管理;表单中的媒体选择只负责上传/复用和回填,不要把删除历史媒体混入选择流程。
+
+```tsx
+const [pickerOpen, setPickerOpen] = useState(false)
+const [cover, setCover] = useState<MediaPickerValue | null>(null)
+
+<Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>
+  {cover ? cover.original_name : t('orders.choose_cover')}
+</Button>
+<MediaPicker
+  open={pickerOpen}
+  onOpenChange={setPickerOpen}
+  type="image"
+  onSelect={setCover}
+/>
+```
+
+表单保存时只提交业务需要的稳定值,例如 `cover_id: cover?.id ?? null`。
+
 ## 6. 新页面检查清单
 
 提交前对照:
