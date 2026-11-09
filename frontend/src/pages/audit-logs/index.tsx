@@ -11,6 +11,7 @@ import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
 import { useOnTabActivate } from '../../components/layout/keep-alive'
+import { formatTimestamp } from '../../lib/date-time'
 
 const pageSize = 20
 
@@ -96,7 +97,7 @@ export const AuditLogsPage: React.FC = () => {
           },
           { key: 'ip', title: 'IP', className: 'text-gray-500 text-xs' },
           { key: 'duration', title: t('logs.duration'), label: t('logs.duration'), className: 'text-gray-500 text-xs', render: log => `${log.duration}μs` },
-          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-gray-500 text-xs', render: log => new Date(log.created_at).toLocaleString(locale) },
+          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-gray-500 text-xs', render: log => formatTimestamp(log.created_at, locale) },
         ]}
       />
     </div>

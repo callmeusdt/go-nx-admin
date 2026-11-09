@@ -43,7 +43,7 @@ func createOnlineSession(db *gorm.DB, user models.User, ip, userAgent string) (a
 	if err != nil {
 		return "", "", err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	err = db.Create(&models.OnlineUser{
 		UserID:         user.ID,
 		Username:       user.Username,
@@ -79,7 +79,7 @@ func RefreshToken(db *gorm.DB) fiber.Handler {
 		if err != nil {
 			return unauthorized(c)
 		}
-		now := time.Now()
+		now := time.Now().UTC()
 		if now.After(session.RefreshExpires) {
 			db.Delete(&session)
 			return unauthorized(c)

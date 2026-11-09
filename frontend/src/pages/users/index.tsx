@@ -19,6 +19,7 @@ import { Switch } from '../../components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { DataTable } from '../../components/ui/data-table'
 import { useBatch, BatchSummary, batchDelete, batchSetStatus } from '../../hooks/use-batch'
+import { formatTimestamp, formatTimestampDate } from '../../lib/date-time'
 
 export const UsersPage: React.FC = () => {
   const { t, locale } = useI18n()
@@ -252,7 +253,7 @@ export const UsersPage: React.FC = () => {
               {u.online_user_agent && <div className="mt-0.5 truncate text-[11px] text-gray-400" title={u.online_user_agent}>{u.online_user_agent}</div>}
             </div>
           ) },
-          { key: 'created_at', title: t('users.created_at'), label: t('users.created_at'), className: 'text-gray-500 text-xs', render: u => new Date(u.created_at).toLocaleDateString(locale) },
+          { key: 'created_at', title: t('users.created_at'), label: t('users.created_at'), className: 'text-gray-500 text-xs', render: u => formatTimestampDate(u.created_at, locale) },
           { key: 'actions', title: t('common.actions'), required: true, align: 'right', render: u => (
             <div className="flex items-center justify-end gap-1">
               <IconButton tone="primary" label={t('users.edit')} onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></IconButton>
@@ -356,7 +357,7 @@ export const UsersPage: React.FC = () => {
                 <SimpleTableRow key={session.id}>
                   <SimpleTableCell className="font-mono text-xs text-gray-700">{session.ip || '-'}</SimpleTableCell>
                   <SimpleTableCell className="max-w-[300px] truncate text-xs text-gray-500" title={session.user_agent}>{session.user_agent || '-'}</SimpleTableCell>
-                  <SimpleTableCell className="text-xs text-gray-500">{new Date(session.login_at).toLocaleString(locale)}</SimpleTableCell>
+              <SimpleTableCell className="text-xs text-gray-500">{formatTimestamp(session.login_at, locale)}</SimpleTableCell>
                   <SimpleTableCell className="text-right">
                     {session.is_current ? (
                       <Badge variant="info">{t('users.current_session')}</Badge>

@@ -15,7 +15,7 @@ import (
 )
 
 func browserLogin(c *fiber.Ctx, db *gorm.DB, user models.User) error {
-	start := time.Now()
+	start := time.Now().UTC()
 	purpose := "full"
 	ttl := 8 * time.Hour
 	if user.MFAEnabled {
@@ -30,7 +30,7 @@ func browserLogin(c *fiber.Ctx, db *gorm.DB, user models.User) error {
 	if err != nil {
 		return err
 	}
-	session := models.BrowserSession{UserID: user.ID, TokenHash: middleware.Digest(token), CSRFHash: middleware.Digest(csrf), Purpose: purpose, ExpiresAt: time.Now().Add(ttl), IP: middleware.ClientIP(c), UserAgent: c.Get("User-Agent")}
+	session := models.BrowserSession{UserID: user.ID, TokenHash: middleware.Digest(token), CSRFHash: middleware.Digest(csrf), Purpose: purpose, ExpiresAt: time.Now().UTC().Add(ttl), IP: middleware.ClientIP(c), UserAgent: c.Get("User-Agent")}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var current models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, user.ID).Error; err != nil {
@@ -53,7 +53,7 @@ func browserLogin(c *fiber.Ctx, db *gorm.DB, user models.User) error {
 }
 
 func browserMFAVerify(c *fiber.Ctx, db *gorm.DB) error {
-	start := time.Now()
+	start := time.Now().UTC()
 	session, ok := c.Locals("browser_session").(models.BrowserSession)
 	if !ok || session.Purpose != "mfa" {
 		return c.Status(403).JSON(fiber.Map{"code": "MFA_REQUIRED"})
@@ -82,7 +82,7 @@ func browserMFAVerify(c *fiber.Ctx, db *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&session, session.ID).Error; err != nil {
 			return err
 		}
-		if session.Purpose != "mfa" || time.Now().After(session.ExpiresAt) || session.Attempts >= 5 || !user.MFAEnabled || user.Status != 1 {
+		if session.Purpose != "mfa" || time.Now().UTC().After(session.ExpiresAt) || session.Attempts >= 5 || !user.MFAEnabled || user.Status != 1 {
 			return nil
 		}
 		valid = totp.Validate(in.Code, user.MFASecret)
@@ -106,7 +106,7 @@ func browserMFAVerify(c *fiber.Ctx, db *gorm.DB) error {
 		if !valid {
 			return tx.Model(&session).Update("attempts", gorm.Expr("attempts + 1")).Error
 		}
-		now := time.Now()
+		now := time.Now().UTC()
 		session.TokenHash = middleware.Digest(token)
 		session.CSRFHash = middleware.Digest(csrf)
 		session.Purpose = "full"
@@ -157,7 +157,8 @@ func browserReauthenticate(c *fiber.Ctx, db *gorm.DB) error {
 		if user.Status != 1 || !user.MFAEnabled || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(in.Password)) != nil || !totp.Validate(in.Code, user.MFASecret) {
 			return nil
 		}
-		result := tx.Model(&models.BrowserSession{}).Where("id = ? AND purpose = ? AND expires_at > ?", session.ID, "full", time.Now()).Update("reauthenticated_at", time.Now())
+		now := time.Now().UTC()
+		result := tx.Model(&models.BrowserSession{}).Where("id = ? AND purpose = ? AND expires_at > ?", session.ID, "full", now).Update("reauthenticated_at", now)
 		valid = result.RowsAffected == 1
 		return result.Error
 	})

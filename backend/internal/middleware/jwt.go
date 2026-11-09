@@ -41,7 +41,7 @@ func jwtConfig() config.JWTConfig {
 }
 
 func signToken(userID uint, username, role string, roleID uint, purpose string, ttl time.Duration) (string, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	claims := Claims{
 		UserID: userID, Username: username, Role: role, RoleID: roleID, Purpose: purpose,
 		RegisteredClaims: jwt.RegisteredClaims{

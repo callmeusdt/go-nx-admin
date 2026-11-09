@@ -31,7 +31,7 @@ var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("nx-admin-dummy-pa
 
 func Login(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		start := time.Now()
+		start := time.Now().UTC()
 
 		ip := clientIP(c)
 
@@ -305,7 +305,7 @@ func MFAVerify(db *gorm.DB) fiber.Handler {
 		if middleware.CookieMode() {
 			return browserMFAVerify(c, db)
 		}
-		start := time.Now()
+		start := time.Now().UTC()
 		var req struct {
 			MfaToken     string `json:"mfa_token"`
 			Code         string `json:"code"`

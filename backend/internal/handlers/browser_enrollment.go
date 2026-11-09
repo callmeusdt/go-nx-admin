@@ -29,7 +29,7 @@ func browserEnrollment(c *fiber.Ctx, db *gorm.DB, enable bool) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&session, session.ID).Error; err != nil {
 			return err
 		}
-		if user.Status != 1 || user.MFAEnabled || session.Purpose != "full" || time.Now().After(session.ExpiresAt) {
+		if user.Status != 1 || user.MFAEnabled || session.Purpose != "full" || time.Now().UTC().After(session.ExpiresAt) {
 			invalid = true
 			return nil
 		}
@@ -60,7 +60,7 @@ func browserEnrollment(c *fiber.Ctx, db *gorm.DB, enable bool) error {
 		if err := tx.Where("user_id = ? AND id <> ?", user.ID, session.ID).Delete(&models.BrowserSession{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&session).Updates(map[string]any{"reauthenticated_at": time.Now(), "attempts": 0}).Error; err != nil {
+		if err := tx.Model(&session).Updates(map[string]any{"reauthenticated_at": time.Now().UTC(), "attempts": 0}).Error; err != nil {
 			return err
 		}
 		result = fiber.Map{"message": "ok", "recovery_codes": codes}

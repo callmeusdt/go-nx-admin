@@ -61,7 +61,7 @@ func BrowserAuth(db *gorm.DB) fiber.Handler {
 			return browserError(c, 401, "UNAUTHENTICATED")
 		}
 		var session models.BrowserSession
-		if err := db.Where("token_hash = ? AND expires_at > ?", Digest(credential), time.Now()).First(&session).Error; err != nil {
+		if err := db.Where("token_hash = ? AND expires_at > ?", Digest(credential), time.Now().UTC()).First(&session).Error; err != nil {
 			return browserError(c, 401, "UNAUTHENTICATED")
 		}
 		if mutation {

@@ -21,7 +21,7 @@ var ExtraDashboardStats DashboardStatsProvider
 func DashboardStats(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var totalUsers, onlineUsers, totalRoles, todayLogins int64
-		today := time.Now().Format("2006-01-02")
+		today := time.Now().UTC().Format("2006-01-02")
 		for _, q := range []struct {
 			query *gorm.DB
 			into  *int64

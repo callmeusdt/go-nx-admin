@@ -36,7 +36,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 		var onlineUsers []models.OnlineUser
 		if middleware.CookieMode() {
 			var sessions []models.BrowserSession
-			if err := db.Where("purpose = ? AND expires_at > ?", "full", time.Now()).Order("created_at desc").Find(&sessions).Error; err != nil {
+			if err := db.Where("purpose = ? AND expires_at > ?", "full", time.Now().UTC()).Order("created_at desc").Find(&sessions).Error; err != nil {
 				return err
 			}
 			for _, session := range sessions {
@@ -585,7 +585,7 @@ func ListOnlineUsers(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if middleware.CookieMode() {
 			page, size, offset := pagination(c)
-			query := db.Table("admin_browser_sessions s").Joins("JOIN admin_users u ON u.id=s.user_id").Joins("JOIN admin_roles r ON r.id=u.role_id").Where("s.purpose = ? AND s.expires_at > ?", "full", time.Now())
+			query := db.Table("admin_browser_sessions s").Joins("JOIN admin_users u ON u.id=s.user_id").Joins("JOIN admin_roles r ON r.id=u.role_id").Where("s.purpose = ? AND s.expires_at > ?", "full", time.Now().UTC())
 			var total int64
 			if err := query.Count(&total).Error; err != nil {
 				return err

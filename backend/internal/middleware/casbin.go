@@ -207,7 +207,7 @@ func LoadCasbin(db *gorm.DB) (*casbin.Enforcer, error) {
 
 func CasbinMiddleware(e *casbin.Enforcer, db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		start := time.Now()
+		start := time.Now().UTC()
 		path := c.Path()
 		method := c.Method()
 

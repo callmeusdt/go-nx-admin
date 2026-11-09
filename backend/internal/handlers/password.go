@@ -90,7 +90,7 @@ func ChangePassword(db *gorm.DB) fiber.Handler {
 			return tx.Model(&user).Updates(map[string]any{
 				"password":             string(hashed),
 				"must_change_password": false,
-				"updated_at":           time.Now(),
+				"updated_at":           time.Now().UTC(),
 			}).Error
 		})
 		if err != nil {

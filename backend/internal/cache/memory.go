@@ -52,7 +52,7 @@ func expireAt(ttl time.Duration) time.Time {
 	if ttl <= 0 {
 		return time.Time{}
 	}
-	return time.Now().Add(ttl)
+	return time.Now().UTC().Add(ttl)
 }
 
 // live returns the entry only if present and unexpired; callers hold m.mu.
@@ -61,7 +61,7 @@ func (m *Memory) live(key string) *memEntry {
 	if !ok {
 		return nil
 	}
-	if e.expired(time.Now()) {
+	if e.expired(time.Now().UTC()) {
 		delete(m.data, key)
 		return nil
 	}

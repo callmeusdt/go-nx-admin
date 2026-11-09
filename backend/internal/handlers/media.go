@@ -73,7 +73,7 @@ func UploadMedia(db *gorm.DB) fiber.Handler {
 		}
 
 		ext = "." + ext
-		now := time.Now()
+		now := time.Now().UTC()
 		newName := uuid.New().String() + ext
 		key := fmt.Sprintf("uploads/%s/%s/%s/%s", now.Format("2006"), now.Format("01"), now.Format("02"), newName)
 

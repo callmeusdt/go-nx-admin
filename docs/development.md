@@ -70,3 +70,13 @@ createApp({
 - [ ] 新增路由已配置 `extraRouteLabels` 或 `routes.<完整路径>`，没有重复硬编码标题。
 - [ ] 二开使用 `createApp({ i18n })` 扩展，没有修改底座字典或在 provider 中建立第二套翻译机制。
 - [ ] 已验证语言切换、刷新、深链接和页签标题在目标语言下正常显示。
+
+## 时间与时区
+
+- 后端持久化和 API 时间字段统一使用 UTC。创建、更新、过期、审计、登录和会话时间写入前使用 `time.Now().UTC()`；不要依赖服务器进程的本地时区。
+- API 返回时间必须保留明确的 UTC 语义，优先使用带 `Z` 的 RFC3339 时间字符串；不要把 UTC 时间格式化成无时区的本地字符串后再返回。
+- 前端渲染带时区的 API 时间时，使用浏览器客户端时区显示，不手动固定服务器时区或应用时区；保留现有 locale 和页面已设定的显示格式，例如 `toLocaleString(locale)` / `toLocaleDateString(locale)`。
+- 日期筛选和“业务日期”字段不是同一概念：`DateTimeInput mode="date"` 表示不做时区转换的日历日期；带时间的筛选值才按既定的本地输入规则转换后提交。
+- 不要在前端使用固定 `UTC`、服务器时区或用户配置时区覆盖普通时间显示，除非需求明确是跨时区对账、排班等业务场景。
+- 新增时间字段时必须同时说明存储时区、API 格式、前端显示时区和筛选边界；不得只在页面里临时转换。
+- 前端统一使用 `frontend/src/lib/date-time.ts` 的 `formatTimestamp` / `formatTimestampDate`：不传 `timeZone` 时使用浏览器客户端时区，需要指定时传入 IANA 时区名（例如 `Asia/Shanghai`）；不要在页面内重复实现 `Date` 转换或改变现有 locale 格式。

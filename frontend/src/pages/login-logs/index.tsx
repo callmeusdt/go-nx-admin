@@ -11,6 +11,7 @@ import { DateTimeInput } from '../../components/ui/datetime-input'
 import { DataTable } from '../../components/ui/data-table'
 import { useI18n } from '../../contexts/i18n-context'
 import { useOnTabActivate } from '../../components/layout/keep-alive'
+import { formatTimestamp } from '../../lib/date-time'
 
 const pageSize = 20
 
@@ -105,7 +106,7 @@ export const LoginLogsPage: React.FC = () => {
             render: log => <><div className="font-mono text-xs">{log.ip || '-'}</div><div className="mt-0.5 text-xs text-gray-500">{log.geo || '-'}</div></>,
           },
           { key: 'message', title: t('login_logs.message'), label: t('login_logs.message'), render: log => translated('login_logs.reason.' + log.message, log.message) },
-          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-xs text-gray-500', render: log => new Date(log.created_at).toLocaleString(locale) },
+          { key: 'created_at', title: t('logs.time'), label: t('logs.time'), className: 'text-xs text-gray-500', render: log => formatTimestamp(log.created_at, locale) },
         ]}
       />
     </div>

@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -76,4 +77,9 @@ func sqliteDSN(dsn string) string {
 
 // gormConfig translates driver errors into GORM's portable ones so handlers can
 // tell a duplicate key from a failure without parsing driver text.
-func gormConfig() *gorm.Config { return &gorm.Config{TranslateError: true} }
+func gormConfig() *gorm.Config {
+	return &gorm.Config{
+		TranslateError: true,
+		NowFunc:        func() time.Time { return time.Now().UTC() },
+	}
+}
