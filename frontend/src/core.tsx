@@ -65,7 +65,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>
 }
 
-const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = [], keepAliveExclude: string[] = [], home: string = DEFAULT_HOME_PATH): React.ReactElement[] => {
+const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<string, string>, disabled: string[] = [], keepAliveExclude: string[] = [], home: string = DEFAULT_HOME_PATH, layout?: LayoutOptions): React.ReactElement[] => {
   const labels = extraLabels ?? {}
   const builtin = [
     <Route key="/login" path="/login" element={<LoginPage />} />,
@@ -76,7 +76,7 @@ const buildRoutes = (extraRoutes?: React.ReactElement[], extraLabels?: Record<st
         <ProtectedRoute>
           <RouteLabelsContext.Provider value={labels}>
             <KeepAliveExcludeContext.Provider value={keepAliveExclude}>
-              <Layout />
+              <Layout options={layout} />
             </KeepAliveExcludeContext.Provider>
           </RouteLabelsContext.Provider>
         </ProtectedRoute>
@@ -112,6 +112,13 @@ export interface CreateAppOptions {
   dashboard?: DashboardOptions
   /** Where sign-in lands and which tab stays pinned. Defaults to /dashboard. */
   homePath?: string
+  /** Optional minimum width for the main content shell; unset preserves current responsive behavior. */
+  layout?: LayoutOptions
+}
+
+export interface LayoutOptions {
+  /** CSS width or pixel number applied only to the main content shell. */
+  contentMinWidth?: number | string
 }
 
 export function createApp(opts?: CreateAppOptions): React.FC {
@@ -141,7 +148,7 @@ export function createApp(opts?: CreateAppOptions): React.FC {
                 }}
               >
                 <Routes>
-                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources, opts?.keepAliveExclude, opts?.homePath)}
+                  {buildRoutes(opts?.extraRoutes, opts?.extraRouteLabels, opts?.disabledResources, opts?.keepAliveExclude, opts?.homePath, opts?.layout)}
                 </Routes>
               </Refine>
               </DashboardOptionsContext.Provider>

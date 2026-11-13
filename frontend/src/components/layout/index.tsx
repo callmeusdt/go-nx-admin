@@ -8,10 +8,17 @@ import { LockScreen } from './lock-screen'
 import { PasswordGate } from '../security/force-password-change'
 import { PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useI18n } from '../../contexts/i18n-context'
+import type { LayoutOptions } from '../../core'
 
 export { RouteLabelsContext } from './route-labels'
 
-export const Layout: React.FC = () => {
+const contentMinWidth = (value: LayoutOptions['contentMinWidth']): string | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return `${value}px`
+  if (typeof value === 'string' && /^\d+(?:\.\d+)?(?:px|rem|em|ch|vw|vh|%)$/.test(value.trim())) return value.trim()
+  return undefined
+}
+
+export const Layout: React.FC<{ options?: LayoutOptions }> = ({ options }) => {
   const { t } = useI18n()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   useEffect(() => {
@@ -43,8 +50,12 @@ export const Layout: React.FC = () => {
             <UserMenu />
           </div>
         </header>
-        <main className="flex-1 min-h-0 overflow-hidden">
-          <KeepAliveOutlet />
+        <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
+          <div className="h-full min-w-0 overflow-x-auto overflow-y-hidden">
+            <div className="h-full" style={{ minWidth: contentMinWidth(options?.contentMinWidth) }}>
+              <KeepAliveOutlet />
+            </div>
+          </div>
         </main>
       </div>
       <LockScreen />

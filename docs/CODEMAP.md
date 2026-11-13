@@ -65,7 +65,7 @@ go-nx-admin 代码地图。改代码前先读这里,再打开具体文件核对;
 
 | 路径 | 内容 |
 |---|---|
-| `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**;`buildRoutes` 装配所有页面 |
+| `core.tsx` | `createApp(opts)` 唯一二开入口。选项:`extraResources`/`extraRoutes`/`extraRouteLabels`/`sessionMode`/`disabledResources`/`i18n`/`keepAliveExclude`/**`dashboard`**/**`homePath`**/**`layout`**;`buildRoutes` 装配所有页面 |
 | `dashboard/` | **仪表盘定制**,见下节 |
 | `components/ui/` | 公共视觉组件(基座统一入口):`button`(`asChild`)、`input`、`textarea`、`select`(Radix,自绘下拉；Trigger透传id/aria-describedby/aria-invalid以关联FormField)、`checkbox`、`radio-group`、`switch`、`datetime-input`、`media-picker`(上传并复用历史媒体,选择结果回填表单)、`media-field`(媒体字段预览/更换/清除);`form-field`、`filter-bar`;`dialog`、`confirm-dialog`、`popover`、`dropdown-menu`、`tooltip`、`toast`(`ToastProvider` 在 `createApp` 内,`useToast`);`alert`、`badge`、`spinner`、`empty-state`、`skeleton`、`page-header`(兼容 `actions`,支持 `primaryActions`/`secondaryActions` 分组与分隔线)、`icon-button`、`tabs`;`data-table`(列设置在表头末列、批量条在卡片内)、`table`(`SimpleTable*`) |
 | `components/layout/` | `index.tsx` 外壳(顶栏单行:折叠按钮 + 页签 + 右侧工具区,无面包屑);`route-labels.ts`(`RouteLabelsContext`);`sidebar.tsx`(直达已授权叶子路由时登记页签以保留 pane,随当前路由展开祖先并高亮,未注册路径如 `/users/5` 不定位菜单;`/auth/menus` 返回前显示骨架,不先画基座菜单;菜单 `icon` 使用 lucide-react 组件名,在 `menuIconMap` 显式登记,未登记回退 `Circle`);`tabs.tsx`(位于顶栏内,`flex-1 min-w-0` 横向滚动,不挤右侧工具区;横向溢出不撑高;首页标签无关闭按钮、不可固定,「关闭其他/全部」「关闭左/右」都保留它);`keep-alive.tsx`(每个标签一个 pane、`useTabActive`/`useOnTabActivate`、刷新仅重挂本 pane、`TAB_REFRESH_EVENT`);`user-menu.tsx`(含「安全设置」);`lock-screen.tsx`、`global-tools.tsx` |
