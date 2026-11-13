@@ -95,7 +95,7 @@ export const UsersPage: React.FC = () => {
       if (dialog.mode === 'create') {
         await api.post('/users', form)
       } else {
-        await api.put(`/users/${dialog.user!.id}`, form)
+        await api.put(`/users/${dialog.user!.id}`, { ...form, version: dialog.user!.version })
       }
       setDialog({ open: false, mode: 'create' })
       fetchUsers()
@@ -109,7 +109,8 @@ export const UsersPage: React.FC = () => {
   const handleDelete = async () => {
     if (!delId) return
     try {
-      await api.del(`/users/${delId}`)
+      const user = users.find(item => item.id === delId)
+      await api.del(`/users/${delId}`, user ? { version: user.version } : undefined)
       setSelected(prev => prev.filter(id => id !== delId))
       setDelId(null)
       fetchUsers()

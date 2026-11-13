@@ -136,6 +136,27 @@ func TestUpdateUserWithoutRoleKeepsRole(t *testing.T) {
 	}
 }
 
+func TestStaleUserVersionIsRejectedWithoutOverwriting(t *testing.T) {
+	h := newBearerHarness(t, nil)
+	access, _ := h.login()
+	self := me(h)
+	target := makeUsers(t, h.db, self.RoleID, "cas-target")[0]
+	var opened models.User
+	h.db.First(&opened, target)
+	stale := opened.Version
+	if c, _ := h.do("PUT", "/api/v1/users/"+itoa(int(target)), fmt.Sprintf(`{"version":%d,"status":0}`, stale), access); c != 200 {
+		t.Fatalf("first save = %d", c)
+	}
+	if c, body := h.do("PUT", "/api/v1/users/"+itoa(int(target)), fmt.Sprintf(`{"version":%d,"status":1}`, stale), access); c != 409 || body["code"] != "RESOURCE_VERSION_CONFLICT" {
+		t.Fatalf("stale save = %d %v", c, body)
+	}
+	var got models.User
+	h.db.First(&got, target)
+	if got.Status != 0 || got.Version != stale+1 {
+		t.Fatalf("stale save overwrote resource: status=%d version=%d", got.Status, got.Version)
+	}
+}
+
 func TestDeletingRoleRevokesItsPolicyAndGrants(t *testing.T) {
 	var enforcer *casbin.Enforcer
 	h := newBearerHarnessSeeded(t, func(o *RuntimeOptions) {

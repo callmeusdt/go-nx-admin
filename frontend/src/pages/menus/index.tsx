@@ -110,7 +110,7 @@ export const MenusPage: React.FC = () => {
       if (dialog.mode === 'create') {
         await api.post('/menus', body)
       } else {
-        await api.put(`/menus/${dialog.menu!.id}`, body)
+      await api.put(`/menus/${dialog.menu!.id}`, { ...body, version: dialog.menu!.version })
       }
       setDialog({ open: false, mode: 'create' })
       fetchMenus()
@@ -124,7 +124,8 @@ export const MenusPage: React.FC = () => {
   const handleDelete = async () => {
     if (!delId) return
     try {
-      await api.del(`/menus/${delId}`)
+      const menu = menus.find(item => item.id === delId)
+      await api.del(`/menus/${delId}`, menu ? { version: menu.version } : undefined)
       setDelId(null)
       fetchMenus()
     } catch { /* */ }

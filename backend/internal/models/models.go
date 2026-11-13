@@ -30,6 +30,7 @@ type User struct {
 	MustChangePassword bool      `gorm:"default:false" json:"must_change_password"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+	Version            uint      `gorm:"default:1;not null" json:"version"`
 }
 
 func (User) TableName() string { return "admin_users" }
@@ -42,6 +43,7 @@ type Role struct {
 	Users     []User    `gorm:"foreignKey:RoleID" json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Version   uint      `gorm:"default:1;not null" json:"version"`
 }
 
 func (Role) TableName() string { return "admin_roles" }
@@ -57,6 +59,7 @@ type Menu struct {
 	Children   []Menu    `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	Version    uint      `gorm:"default:1;not null" json:"version"`
 }
 
 func (Menu) TableName() string { return "admin_menus" }
@@ -98,6 +101,7 @@ type Api struct {
 	Source    string    `gorm:"size:16;not null;default:''" json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Version   uint      `gorm:"default:1;not null" json:"version"`
 }
 
 // ApiSourceAuto marks an Api row owned by AutoDiscoverAPIs.

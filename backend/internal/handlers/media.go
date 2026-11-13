@@ -162,6 +162,10 @@ func DeleteMedia(db *gorm.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"message": "storage unavailable"})
 		}
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
+		version, err := requestVersion(c)
+		if err != nil {
+			return err
+		}
 		var media models.Media
 		if err := db.First(&media, id).Error; err != nil {
 			return c.Status(404).JSON(fiber.Map{"message": "media not found"})
@@ -171,11 +175,18 @@ func DeleteMedia(db *gorm.DB) fiber.Handler {
 			return internalError(c, err)
 		}
 		// Remove the object first: if that fails the record stays, so the file
-		// is never orphaned and the delete can be retried.
+		// is never orphaned and the delete can be retried. The version check is
+		// performed before touching storage so a stale request cannot delete a
+		// newer record's object.
+		if version != 0 && media.Version != version {
+			return versionConflict(c)
+		}
 		if err := drv.Delete(c.UserContext(), media.Path); err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "delete file error"})
 		}
-		db.Delete(&media)
+		if err := deleteVersioned(db, &models.Media{}, uint(id), version); err != nil {
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }
