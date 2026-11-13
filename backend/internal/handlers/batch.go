@@ -113,14 +113,6 @@ func deleteUserCascade(db *gorm.DB, id uint) error {
 
 func deleteUserCascadeVersioned(db *gorm.DB, id uint, version uint) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", id).Delete(&models.OnlineUser{}).Error; err != nil {
-			return err
-		}
-		if middleware.CookieMode() {
-			if err := tx.Where("user_id = ?", id).Delete(&models.BrowserSession{}).Error; err != nil {
-				return err
-			}
-		}
 		query := tx.Where("id = ?", id)
 		if version != 0 {
 			query = query.Where("version = ?", version)
@@ -131,6 +123,14 @@ func deleteUserCascadeVersioned(db *gorm.DB, id uint, version uint) error {
 		}
 		if result.RowsAffected != 1 {
 			return ErrVersionConflict
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&models.OnlineUser{}).Error; err != nil {
+			return err
+		}
+		if middleware.CookieMode() {
+			if err := tx.Where("user_id = ?", id).Delete(&models.BrowserSession{}).Error; err != nil {
+				return err
+			}
 		}
 		return nil
 	})

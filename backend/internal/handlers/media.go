@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-nx-admin/internal/config"
 	"go-nx-admin/internal/models"
@@ -167,25 +169,36 @@ func DeleteMedia(db *gorm.DB) fiber.Handler {
 			return err
 		}
 		var media models.Media
-		if err := db.First(&media, id).Error; err != nil {
+		var drv storage.Storage
+		err = db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&media, id).Error; err != nil {
+				return err
+			}
+			if version != 0 && media.Version != version {
+				return ErrVersionConflict
+			}
+			var err error
+			drv, err = reg.For(media.Storage)
+			if err != nil {
+				return err
+			}
+			if err := drv.Delete(c.UserContext(), media.Path); err != nil {
+				return err
+			}
+			return tx.Delete(&media).Error
+		})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.Status(404).JSON(fiber.Map{"message": "media not found"})
 		}
-		drv, err := reg.For(media.Storage)
-		if err != nil {
-			return internalError(c, err)
+		if errors.Is(err, ErrVersionConflict) {
+			return versionConflict(c)
 		}
 		// Remove the object first: if that fails the record stays, so the file
 		// is never orphaned and the delete can be retried. The version check is
 		// performed before touching storage so a stale request cannot delete a
 		// newer record's object.
-		if version != 0 && media.Version != version {
-			return versionConflict(c)
-		}
-		if err := drv.Delete(c.UserContext(), media.Path); err != nil {
+		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"message": "delete file error"})
-		}
-		if err := deleteVersioned(db, &models.Media{}, uint(id), version); err != nil {
-			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}

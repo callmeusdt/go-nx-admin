@@ -213,8 +213,8 @@ func ListRoles(db *gorm.DB) fiber.Handler {
 func CreateRole(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req struct {
-			Name    string `json:"name"`
-			Slug    string `json:"slug"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
@@ -265,6 +265,13 @@ func deleteRole(db *gorm.DB, e *casbin.Enforcer, role models.Role) error {
 
 func deleteRoleVersioned(db *gorm.DB, e *casbin.Enforcer, role models.Role, version uint) error {
 	err := db.Transaction(func(tx *gorm.DB) error {
+		var current models.Role
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, role.ID).Error; err != nil {
+			return err
+		}
+		if version != 0 && current.Version != version {
+			return ErrVersionConflict
+		}
 		var inUse int64
 		if err := tx.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&inUse).Error; err != nil {
 			return err
@@ -275,16 +282,8 @@ func deleteRoleVersioned(db *gorm.DB, e *casbin.Enforcer, role models.Role, vers
 		if err := tx.Where("role_id = ?", role.ID).Delete(&models.RoleMenu{}).Error; err != nil {
 			return err
 		}
-		query := tx.Where("id = ?", role.ID)
-		if version != 0 {
-			query = query.Where("version = ?", version)
-		}
-		result := query.Delete(&models.Role{})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrVersionConflict
+		if err := tx.Delete(&current).Error; err != nil {
+			return err
 		}
 		return nil
 	})
@@ -469,6 +468,13 @@ func DeleteMenu(db *gorm.DB) fiber.Handler {
 		// Role grants point at menu ids; leaving them behind would attach the
 		// old grant to whatever menu later reuses the id.
 		if err := db.Transaction(func(tx *gorm.DB) error {
+			var current models.Menu
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, id).Error; err != nil {
+				return err
+			}
+			if version != 0 && current.Version != version {
+				return ErrVersionConflict
+			}
 			if err := tx.Where("menu_id IN ?", ids).Delete(&models.RoleMenu{}).Error; err != nil {
 				return err
 			}

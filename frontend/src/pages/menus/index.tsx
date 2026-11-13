@@ -24,6 +24,7 @@ interface FlatMenu {
   name: string
   icon: string
   sort: number
+  version: number
   children?: Menu[]
   depth: number
   parentPath: number[]
