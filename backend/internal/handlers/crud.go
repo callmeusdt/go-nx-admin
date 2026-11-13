@@ -71,6 +71,7 @@ func ListUsers(db *gorm.DB) fiber.Handler {
 				"must_change_password": user.MustChangePassword,
 				"created_at":           user.CreatedAt,
 				"updated_at":           user.UpdatedAt,
+				"version":              user.Version,
 				"is_online":            false,
 			}
 			if sessions, ok := onlineByUserID[user.ID]; ok && len(sessions) > 0 {
@@ -118,6 +119,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		var req struct {
+			Version  uint   `json:"version"`
 			Username string `json:"username"`
 			Password string `json:"password,omitempty"`
 			Status   *int   `json:"status"`
@@ -159,7 +161,7 @@ func UpdateUser(db *gorm.DB) fiber.Handler {
 			return c.JSON(fiber.Map{"message": "ok"})
 		}
 		err := db.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			if err := updateVersioned(tx, &models.User{}, uint(id), req.Version, updates); err != nil {
 				return err
 			}
 			if middleware.CookieMode() {
@@ -187,7 +189,11 @@ func DeleteUser(db *gorm.DB) fiber.Handler {
 		if exists == 0 {
 			return c.Status(404).JSON(fiber.Map{"message": "not found"})
 		}
-		if err := deleteUserCascade(db, uint(id)); err != nil {
+		version, err := requestVersion(c)
+		if err != nil {
+			return err
+		}
+		if err := deleteUserCascadeVersioned(db, uint(id), version); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -225,8 +231,9 @@ func UpdateRole(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
 		var req struct {
-			Name string `json:"name"`
-			Slug string `json:"slug"`
+			Version uint   `json:"version"`
+			Name    string `json:"name"`
+			Slug    string `json:"slug"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
@@ -240,7 +247,7 @@ func UpdateRole(db *gorm.DB) fiber.Handler {
 		if req.Slug != "" && req.Slug != role.Slug {
 			return c.Status(400).JSON(fiber.Map{"message": "role slug cannot be changed"})
 		}
-		if err := db.Model(&models.Role{}).Where("id = ?", id).Update("name", req.Name).Error; err != nil {
+		if err := updateVersioned(db, &models.Role{}, uint(id), req.Version, map[string]any{"name": req.Name}); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -253,7 +260,18 @@ var errRoleInUse = errors.New("role is assigned to users")
 // policies are keyed by slug, so leaving them behind would hand the old
 // permissions to any later role created with the same slug.
 func deleteRole(db *gorm.DB, e *casbin.Enforcer, role models.Role) error {
+	return deleteRoleVersioned(db, e, role, 0)
+}
+
+func deleteRoleVersioned(db *gorm.DB, e *casbin.Enforcer, role models.Role, version uint) error {
 	err := db.Transaction(func(tx *gorm.DB) error {
+		var current models.Role
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, role.ID).Error; err != nil {
+			return err
+		}
+		if version != 0 && current.Version != version {
+			return ErrVersionConflict
+		}
 		var inUse int64
 		if err := tx.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&inUse).Error; err != nil {
 			return err
@@ -264,7 +282,10 @@ func deleteRole(db *gorm.DB, e *casbin.Enforcer, role models.Role) error {
 		if err := tx.Where("role_id = ?", role.ID).Delete(&models.RoleMenu{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&role).Error
+		if err := tx.Delete(&current).Error; err != nil {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return err
@@ -283,7 +304,11 @@ func DeleteRole(db *gorm.DB, e *casbin.Enforcer) fiber.Handler {
 		if role.IsSystem {
 			return c.Status(400).JSON(fiber.Map{"message": "system role cannot be deleted"})
 		}
-		if err := deleteRole(db, e, role); err != nil {
+		version, err := requestVersion(c)
+		if err != nil {
+			return err
+		}
+		if err := deleteRoleVersioned(db, e, role, version); err != nil {
 			if errors.Is(err, errRoleInUse) {
 				return c.Status(409).JSON(fiber.Map{"message": errRoleInUse.Error()})
 			}
@@ -391,10 +416,10 @@ func UpdateMenu(db *gorm.DB) fiber.Handler {
 		} else if msg != "" {
 			return c.Status(400).JSON(fiber.Map{"message": msg})
 		}
-		if err := db.Model(&models.Menu{}).Where("id = ?", id).Updates(map[string]interface{}{
+		if err := updateVersioned(db, &models.Menu{}, uint(id), req.Version, map[string]interface{}{
 			"name": req.Name, "path": req.Path, "icon": req.Icon,
 			"permission": req.Permission, "sort": req.Sort, "parent_id": req.ParentID,
-		}).Error; err != nil {
+		}); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -432,6 +457,10 @@ func menuSubtreeIDs(db *gorm.DB, id uint) ([]uint, error) {
 func DeleteMenu(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
+		version, err := requestVersion(c)
+		if err != nil {
+			return err
+		}
 		ids, err := menuSubtreeIDs(db, uint(id))
 		if err != nil {
 			return dbError(c, err)
@@ -439,10 +468,26 @@ func DeleteMenu(db *gorm.DB) fiber.Handler {
 		// Role grants point at menu ids; leaving them behind would attach the
 		// old grant to whatever menu later reuses the id.
 		if err := db.Transaction(func(tx *gorm.DB) error {
+			var current models.Menu
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, id).Error; err != nil {
+				return err
+			}
+			if version != 0 && current.Version != version {
+				return ErrVersionConflict
+			}
 			if err := tx.Where("menu_id IN ?", ids).Delete(&models.RoleMenu{}).Error; err != nil {
 				return err
 			}
-			return tx.Where("id IN ?", ids).Delete(&models.Menu{}).Error
+			result := tx.Where("id = ?", id)
+			if version != 0 {
+				result = result.Where("version = ?", version)
+			}
+			if deleted := result.Delete(&models.Menu{}); deleted.Error != nil {
+				return deleted.Error
+			} else if deleted.RowsAffected != 1 {
+				return ErrVersionConflict
+			}
+			return tx.Where("id IN ? AND id <> ?", ids, id).Delete(&models.Menu{}).Error
 		}); err != nil {
 			return dbError(c, err)
 		}
@@ -514,10 +559,10 @@ func UpdateApi(db *gorm.DB) fiber.Handler {
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"message": "invalid request"})
 		}
-		if err := db.Model(&models.Api{}).Where("id = ?", id).Updates(map[string]interface{}{
+		if err := updateVersioned(db, &models.Api{}, uint(id), req.Version, map[string]interface{}{
 			"group": req.Group, "name": req.Name, "path": req.Path,
 			"method": req.Method, "description": req.Description,
-		}).Error; err != nil {
+		}); err != nil {
 			return dbError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "ok"})
@@ -527,7 +572,13 @@ func UpdateApi(db *gorm.DB) fiber.Handler {
 func DeleteApi(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _ := strconv.ParseUint(c.Params("id"), 10, 64)
-		db.Delete(&models.Api{}, id)
+		version, err := requestVersion(c)
+		if err != nil {
+			return err
+		}
+		if err := deleteVersioned(db, &models.Api{}, uint(id), version); err != nil {
+			return dbError(c, err)
+		}
 		return c.JSON(fiber.Map{"message": "ok"})
 	}
 }

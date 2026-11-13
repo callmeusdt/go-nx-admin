@@ -21,6 +21,8 @@ import (
 // a fallback and the result is the same either way.
 func dbError(c *fiber.Ctx, err error) error {
 	switch {
+	case errors.Is(err, ErrVersionConflict):
+		return versionConflict(c)
 	case errors.Is(err, gorm.ErrDuplicatedKey) || isUniqueViolation(err):
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"message": "already exists"})
 	case errors.Is(err, gorm.ErrForeignKeyViolated):

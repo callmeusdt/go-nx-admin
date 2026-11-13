@@ -8,6 +8,7 @@ export interface User {
   must_change_password?: boolean
   created_at: string
   updated_at?: string
+  version: number
   is_online?: boolean
   online_ip?: string
   online_user_agent?: string
@@ -41,6 +42,7 @@ export interface Role {
   name: string
   slug: string
   is_system: boolean
+  version: number
 }
 
 export interface Menu {
@@ -51,6 +53,7 @@ export interface Menu {
   name: string
   icon: string
   sort: number
+  version: number
   children?: Menu[]
 }
 
@@ -76,6 +79,7 @@ export interface ApiItem {
   method: string
   description: string
   created_at: string
+  version: number
 }
 
 export interface LoginLog {
@@ -112,6 +116,7 @@ export interface Media {
   size: number
   type: 'image' | 'file' | 'video'
   created_at: string
+  version: number
 }
 
 export interface SystemConfig {

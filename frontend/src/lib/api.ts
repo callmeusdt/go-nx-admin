@@ -22,8 +22,11 @@ async function request<T = any>(
   }
 
   if (!res.ok) {
-    await res.json().catch(() => null)
-    throw new Error(builtinMessage(document.documentElement.lang, 'ui.request_failed'))
+    const payload = await res.json().catch(() => null)
+    const error = new Error(builtinMessage(document.documentElement.lang, 'ui.request_failed')) as Error & { code?: string; status?: number }
+    error.code = payload?.code
+    error.status = res.status
+    throw error
   }
 
   return res.json()

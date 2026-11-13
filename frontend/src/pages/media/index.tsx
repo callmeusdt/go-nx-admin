@@ -57,7 +57,7 @@ export const MediaPage: React.FC = () => {
   const handleDelete = async () => {
     if (delId === null) return
     setError('')
-    try { await api.del('/media/' + delId); setDelId(null); await fetchList() }
+    try { const item = items.find(row => row.id === delId); await api.del('/media/' + delId, item ? { version: item.version } : undefined); setDelId(null); await fetchList() }
     catch { setDelId(null); setError(t('ui.request_failed')) }
   }
 

@@ -108,7 +108,22 @@ func BatchDeleteUsers(db *gorm.DB) fiber.Handler {
 // deleteUserCascade removes the user and ends their sessions in one transaction,
 // so a deleted account can not keep a live token.
 func deleteUserCascade(db *gorm.DB, id uint) error {
+	return deleteUserCascadeVersioned(db, id, 0)
+}
+
+func deleteUserCascadeVersioned(db *gorm.DB, id uint, version uint) error {
 	return db.Transaction(func(tx *gorm.DB) error {
+		query := tx.Where("id = ?", id)
+		if version != 0 {
+			query = query.Where("version = ?", version)
+		}
+		result := query.Delete(&models.User{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrVersionConflict
+		}
 		if err := tx.Where("user_id = ?", id).Delete(&models.OnlineUser{}).Error; err != nil {
 			return err
 		}
@@ -117,7 +132,7 @@ func deleteUserCascade(db *gorm.DB, id uint) error {
 				return err
 			}
 		}
-		return tx.Delete(&models.User{}, id).Error
+		return nil
 	})
 }
 

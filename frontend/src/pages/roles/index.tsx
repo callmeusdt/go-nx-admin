@@ -84,7 +84,7 @@ export const RolesPage: React.FC = () => {
       if (dialog.mode === 'create') {
         await api.post('/roles', form)
       } else {
-        await api.put(`/roles/${dialog.role!.id}`, form)
+    await api.put(`/roles/${dialog.role!.id}`, { ...form, version: dialog.role!.version })
       }
       setDialog({ open: false, mode: 'create' })
       fetchRoles()
@@ -98,7 +98,8 @@ export const RolesPage: React.FC = () => {
   const handleDelete = async () => {
     if (!delId) return
     try {
-      await api.del(`/roles/${delId}`)
+    const role = roles.find(item => item.id === delId)
+    await api.del(`/roles/${delId}`, role ? { version: role.version } : undefined)
       setSelected(prev => prev.filter(id => id !== delId))
       setDelId(null)
       setDelErr('')

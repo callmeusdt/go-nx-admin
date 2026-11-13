@@ -46,7 +46,7 @@ export const ApisPage: React.FC = () => {
 
   const remove = async (id: number) => {
     setError('')
-    try { await api.del(`/apis/${id}`); await load() }
+    try { const item = items.find(row => row.id === id); await api.del(`/apis/${id}`, item ? { version: item.version } : undefined); await load() }
     catch { setError(t('apis.failed')) }
   }
   const groupLabel = (group: string) => group === '默认' ? t('apis.default_group') : group === '认证' ? t('apis.auth_group') : group
