@@ -51,11 +51,7 @@ export const Layout: React.FC<{ options?: LayoutOptions }> = ({ options }) => {
           </div>
         </header>
         <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
-          <div className="h-full min-w-0 overflow-x-auto overflow-y-hidden">
-            <div className="h-full" style={{ minWidth: contentMinWidth(options?.contentMinWidth) }}>
-              <KeepAliveOutlet />
-            </div>
-          </div>
+          <KeepAliveOutlet contentMinWidth={contentMinWidth(options?.contentMinWidth)} />
         </main>
       </div>
       <LockScreen />

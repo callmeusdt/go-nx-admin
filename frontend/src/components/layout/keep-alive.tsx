@@ -31,7 +31,7 @@ interface Entry { element: React.ReactElement; version: number }
  * filters, pagination and scroll position survive tab switches. Closing a tab
  * drops its pane; the tab "refresh" action remounts only that pane.
  */
-export const KeepAliveOutlet: React.FC = () => {
+export const KeepAliveOutlet: React.FC<{ contentMinWidth?: string }> = ({ contentMinWidth }) => {
   const outlet = useOutlet()
   const { pathname } = useLocation()
   const { tabs } = useTabs()
@@ -64,7 +64,7 @@ export const KeepAliveOutlet: React.FC = () => {
       {[...panes.current.entries()].map(([key, { element, version }]) => {
         const active = key === pathname
         return (
-          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto p-3 sm:p-4">
+          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto p-3 sm:p-4" style={{ minWidth: contentMinWidth }}>
             <ActiveContext.Provider value={active}>{element}</ActiveContext.Provider>
           </div>
         )

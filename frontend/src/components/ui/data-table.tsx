@@ -174,8 +174,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
   // or after (right) the cell, so the header cells are measured.
   const scrollRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
+  const headerSentinelRef = useRef<HTMLTableSectionElement>(null)
   const [widths, setWidths] = useState<number[]>([])
   const [scrolled, setScrolled] = useState({ left: false, right: false })
+  const [headerPinned, setHeaderPinned] = useState(false)
+  const [bodyScrollLeft, setBodyScrollLeft] = useState(0)
 
   const measure = useCallback(() => {
     const table = tableRef.current
@@ -190,7 +193,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
   }, [])
 
   useLayoutEffect(() => {
-    if (!pinned) return
+    if (!pinned && !stickyHeader) return
     measure()
     const table = tableRef.current
     if (!table || typeof ResizeObserver === 'undefined') return
@@ -198,7 +201,19 @@ export function DataTable<T>(props: DataTableProps<T>) {
     observer.observe(table)
     if (scrollRef.current) observer.observe(scrollRef.current)
     return () => observer.disconnect()
-  }, [pinned, measure, visible, selectable, rows])
+  }, [pinned, stickyHeader, measure, visible, selectable, rows])
+
+  useEffect(() => {
+    if (!stickyHeader) {
+      setHeaderPinned(false)
+      return
+    }
+    const header = headerSentinelRef.current
+    if (!header || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => setHeaderPinned(!entry.isIntersecting), { threshold: 0 })
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [stickyHeader])
 
   // ci is the cell's position in the row, counting the selection column.
   const cellCount = visible.length + (selectable ? 1 : 0)
@@ -229,6 +244,35 @@ export function DataTable<T>(props: DataTableProps<T>) {
     ...(pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS),
     ...(Number.isInteger(pageSize) && pageSize >= 20 ? [pageSize] : []),
   ].filter(size => Number.isInteger(size) && size >= 20))].sort((a, b) => a - b)
+  const tableWidth = Math.max(minWidth, widths.reduce((sum, width) => sum + width, 0))
+
+  const renderHeader = (sentinel = false, hidden = false) => (
+    <thead ref={sentinel ? headerSentinelRef : undefined} className={cn('bg-gray-50 border-b border-gray-200', hidden ? 'invisible' : '')}>
+      <tr>
+        {selectable && (
+          <th className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`} style={pinStyle(pinInfo(0))}>
+            <Checkbox aria-label={t('table.select_all')} checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage} disabled={selectableRows.length === 0} onCheckedChange={toggleAll} />
+          </th>
+        )}
+        {visible.map((col, colIndex) => {
+          const active = currentSort?.field === col.key
+          const sortable = col.sortable && !!onSortChange
+          const pin = pinInfo(colIndex + selOffset)
+          return (
+            <th key={col.key} aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined} className={cn('px-4 py-3 font-medium text-gray-600 whitespace-nowrap', alignClasses(col.align).header, pin ? 'z-20 bg-gray-50' : '', col.headerClassName)} style={pinStyle(pin)}>
+              {sortable ? (
+                <button type="button" onClick={() => nextSort(col.key)} className="inline-flex items-center gap-1 hover:text-gray-900" title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}>
+                  {col.title}
+                  {active ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
+                </button>
+              ) : col.title}
+              {colIndex === visible.length - 1 && columnPicker && <span className="ml-2 inline-flex align-middle">{columnPicker}</span>}
+            </th>
+          )
+        })}
+      </tr>
+    </thead>
+  )
 
   const columnPicker = pickable.length > 0 && (
     <Popover>
@@ -262,7 +306,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     <div className="space-y-3">
       {toolbar && <div className="flex flex-wrap items-center justify-end gap-2">{toolbar}</div>}
 
-      <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="relative bg-white rounded-lg border border-gray-200 overflow-visible">
         {hasSelection && (
           <div className="flex flex-wrap items-center gap-2 border-b border-blue-100 bg-blue-50/60 px-4 py-2 text-sm">
             <span className="text-gray-700">{t('table.selected').replace('{count}', String(selectedKeys.length))}</span>
@@ -270,59 +314,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
             <Button variant="ghost" size="sm" onClick={clear}>{t('table.clear_selection')}</Button>
           </div>
         )}
-        <div ref={scrollRef} className="overflow-x-auto" onScroll={pinned ? measure : undefined}>
+        {stickyHeader && headerPinned && (
+          <div className="sticky top-0 z-30 overflow-hidden border-b border-gray-200 bg-gray-50 shadow-[0_2px_4px_rgba(0,0,0,0.12)]" aria-label={t('table.sticky_header')}>
+            <table className="w-full text-sm" style={{ minWidth: tableWidth, width: tableWidth, transform: `translateX(-${bodyScrollLeft}px)` }}>
+              {widths.length === cellCount && <colgroup>{widths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup>}
+              {renderHeader(false)}
+            </table>
+          </div>
+        )}
+        <div ref={scrollRef} className="overflow-x-auto" onScroll={event => { if (pinned) measure(); if (stickyHeader) setBodyScrollLeft(event.currentTarget.scrollLeft) }}>
         <table ref={tableRef} className="w-full text-sm" style={{ minWidth }}>
-           <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              {selectable && (
-                <th
-                  className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`}
-                  style={pinStyle(pinInfo(0))}
-                >
-                  <Checkbox
-                    aria-label={t('table.select_all')}
-                    checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage}
-                    disabled={selectableRows.length === 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-              )}
-              {visible.map((col, colIndex) => {
-                const active = currentSort?.field === col.key
-                const sortable = col.sortable && !!onSortChange
-                const pin = pinInfo(colIndex + selOffset)
-                return (
-                  <th
-                    key={col.key}
-                    aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
-                    className={cn(
-                      'px-4 py-3 font-medium text-gray-600 whitespace-nowrap',
-                      alignClasses(col.align).header,
-                       pin ? 'z-20 bg-gray-50' : '',
-                       stickyHeader ? 'sticky top-0 z-30 bg-gray-50 shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : '',
-                      col.headerClassName,
-                    )}
-                    style={pinStyle(pin)}
-                  >
-                    {sortable ? (
-                      <button
-                        type="button"
-                        onClick={() => nextSort(col.key)}
-                        className="inline-flex items-center gap-1 hover:text-gray-900"
-                        title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}
-                      >
-                        {col.title}
-                        {active
-                          ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />)
-                          : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
-                      </button>
-                    ) : col.title}
-                    {colIndex === visible.length - 1 && columnPicker && <span className="ml-2 inline-flex align-middle">{columnPicker}</span>}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
+          {renderHeader(true, headerPinned)}
           <tbody>
             {rows.map((row, i) => {
               const key = rowKey(row)

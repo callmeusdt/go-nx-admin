@@ -86,7 +86,7 @@ createApp({
 ## 内容区布局宽度
 
 - 默认不设置内容区最小宽度，保持现有响应式行为；需要保留 PC 式内容宽度的二开项目可通过 `createApp({ layout: { contentMinWidth: 1024 } })` opt-in。
-- `contentMinWidth` 只作用于主内容区，不设置 `body`、`html` 或整个应用外壳的最小宽度；窄视口下横向滚动由内容区承担，避免产生全局页面横向滚动。
+- `contentMinWidth` 只作用于主内容区的现有页面滚动 pane，不设置 `body`、`html` 或整个应用外壳的最小宽度；不新增额外的纵向滚动容器，窄视口下横向滚动由内容区承担。
 - 数值按像素处理，也可传带单位的 CSS 长度（如 `1024px`、`64rem`）；无效值按未配置处理。该配置不是全局桌面模式，不改变 Sidebar、Header、Tabs、Dialog、键盘焦点或 RTL 的独立行为。
 - 页面级内容宽度与宽表滚动职责分离：页面级滚动由内容区承担，`DataTable` 等宽表继续使用自身滚动容器；业务页不要给 `body` 添加 `min-width` 或用临时 CSS 覆盖布局。
 - 二开使用该能力后，应验证 390px、768px、1280px 视口，以及 Dialog、Popover、键盘操作和 RTL；不需要 PC 宽度的项目无需配置。
