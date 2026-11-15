@@ -13,8 +13,6 @@ import { useI18n } from '../../contexts/i18n-context'
 import { useOnTabActivate } from '../../components/layout/keep-alive'
 import { formatTimestamp } from '../../lib/date-time'
 
-const pageSize = 20
-
 const pad = (value: number) => String(value).padStart(2, '0')
 const dateValue = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 const defaultStartDate = () => {
@@ -32,13 +30,15 @@ export const LoginLogsPage: React.FC = () => {
   const [loadFailed, setLoadFailed] = useState(false)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageJump, setPageJump] = useState('')
   const defaultFilters = { username: '', status: '', ip: '', start: defaultStartDate(), end: '' }
   const [filters, setFilters] = useState(defaultFilters)
 
-  const load = useCallback(async (nextPage = page, appliedFilters = filters) => {
+  const load = useCallback(async (nextPage = page, appliedFilters = filters, nextPageSize = pageSize) => {
     setLoadFailed(false)
     try {
-      const params = new URLSearchParams({ page: String(nextPage), page_size: String(pageSize) })
+       const params = new URLSearchParams({ page: String(nextPage), page_size: String(nextPageSize) })
       if (appliedFilters.username) params.set('username', appliedFilters.username)
       if (appliedFilters.status) params.set('status', appliedFilters.status)
       if (appliedFilters.ip) params.set('ip', appliedFilters.ip)
@@ -55,7 +55,7 @@ export const LoginLogsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [filters, page])
+  }, [filters, page, pageSize])
 
   useEffect(() => { load(1) }, [])
   useOnTabActivate(() => { void load(page) })
@@ -92,6 +92,10 @@ export const LoginLogsPage: React.FC = () => {
         loading={loading}
         page={page}
         pageSize={pageSize}
+        pageSizeOptions={[20, 50, 100, 200]}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); void load(1, filters, size) }}
+        pageJump={{ value: pageJump, onChange: setPageJump, onSubmit: () => { const target = Number(pageJump); const maxPage = Math.max(1, Math.ceil(total / pageSize)); if (Number.isInteger(target) && target >= 1) { setPageJump(''); void load(Math.min(target, maxPage)) } } }}
+        paginationId="login-logs"
         total={total}
         onPageChange={load}
         emptyText={loadFailed ? '' : t('common.no_data')}

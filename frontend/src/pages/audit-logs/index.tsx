@@ -13,8 +13,6 @@ import { useI18n } from '../../contexts/i18n-context'
 import { useOnTabActivate } from '../../components/layout/keep-alive'
 import { formatTimestamp } from '../../lib/date-time'
 
-const pageSize = 20
-
 const methodVariants: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
   GET: 'info',
   POST: 'success',
@@ -29,12 +27,14 @@ export const AuditLogsPage: React.FC = () => {
   const [loadFailed, setLoadFailed] = useState(false)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageJump, setPageJump] = useState('')
   const [filters, setFilters] = useState({ operator: '', path: '', method: '', ip: '', start: '', end: '' })
 
-  const fetchLogs = useCallback(async (nextPage = page, appliedFilters = filters) => {
+  const fetchLogs = useCallback(async (nextPage = page, appliedFilters = filters, nextPageSize = pageSize) => {
     setLoadFailed(false)
     try {
-      const params = new URLSearchParams({ page: String(nextPage), page_size: String(pageSize) })
+       const params = new URLSearchParams({ page: String(nextPage), page_size: String(nextPageSize) })
       Object.entries(appliedFilters).forEach(([key, value]) => value && params.set(key, value))
       const res = await api.get<{ data: AuditLog[]; total: number }>(`/audit-logs?${params.toString()}`)
       setLogs(res.data)
@@ -45,7 +45,7 @@ export const AuditLogsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [filters, page])
+  }, [filters, page, pageSize])
 
   useEffect(() => { fetchLogs(1) }, [])
   useOnTabActivate(() => { void fetchLogs(page) })
@@ -82,6 +82,10 @@ export const AuditLogsPage: React.FC = () => {
         loading={loading}
         page={page}
         pageSize={pageSize}
+        pageSizeOptions={[20, 50, 100, 200]}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); void fetchLogs(1, filters, size) }}
+        pageJump={{ value: pageJump, onChange: setPageJump, onSubmit: () => { const target = Number(pageJump); const maxPage = Math.max(1, Math.ceil(total / pageSize)); if (Number.isInteger(target) && target >= 1) { setPageJump(''); void fetchLogs(Math.min(target, maxPage)) } } }}
+        paginationId="audit-logs"
         total={total}
         onPageChange={fetchLogs}
         emptyText={t('audit_logs.empty')}

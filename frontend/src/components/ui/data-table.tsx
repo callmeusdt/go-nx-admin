@@ -5,6 +5,7 @@ import { Button } from './button'
 import { Checkbox } from './checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Tooltip } from './tooltip'
+import { Select } from './select'
 import { cn } from '../../lib/utils'
 
 export type SortOrder = 'asc' | 'desc'
@@ -42,6 +43,13 @@ export interface DataTableProps<T> {
   onPageChange?: (page: number) => void
   /** Additional controls rendered in the pagination footer, beside the page navigation. */
   paginationToolbar?: React.ReactNode
+  /** Page-size choices shown before the page navigation. Omit to keep the compact legacy footer. */
+  pageSizeOptions?: number[]
+  onPageSizeChange?: (pageSize: number) => void
+  /** Optional custom page-jump input; page navigation remains controlled by onPageChange. */
+  pageJump?: { value: string; onChange: (value: string) => void; onSubmit: () => void }
+  /** Enables a viewport-sticky table header. Disabled by default. */
+  stickyHeader?: boolean
 
   /** Controlled sort state. When omitted, the table manages sort state from `defaultSort`. */
   sort?: SortState | null
@@ -70,6 +78,8 @@ export interface DataTableProps<T> {
 
   /** Persists the column picker choice; pass a stable id per table. */
   storageKey?: string
+  /** Stable id suffix used to make the page-jump input unique when several tables render. */
+  paginationId?: string
   toolbar?: React.ReactNode
 }
 
@@ -86,6 +96,7 @@ const alignClasses = (align: DataTableColumn<unknown>['align'] = 'left') => ({
 // through. These match the row states: default, hover, and selected.
 const PIN_BG = 'bg-white group-hover:bg-gray-50'
 const PIN_BG_SELECTED = 'bg-[#f9fbff] group-hover:bg-gray-50'
+const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200]
 
 function readHidden(storageKey?: string): string[] | null {
   if (!storageKey) return null
@@ -101,11 +112,12 @@ function readHidden(storageKey?: string): string[] | null {
 export function DataTable<T>(props: DataTableProps<T>) {
   const {
     columns, rows, rowKey, loading, emptyText, minWidth = 720,
-    page = 1, pageSize = 20, total, onPageChange, paginationToolbar,
+    page = 1, pageSize = 20, total, onPageChange, paginationToolbar, pageSizeOptions, onPageSizeChange, pageJump,
+    stickyHeader = false,
     sort, defaultSort, onSortChange,
     selectable, selectedKeys = [], onSelectionChange, isRowDisabled, batchActions,
     stickyStart, stickyEnd,
-    storageKey, toolbar,
+    storageKey, paginationId, toolbar,
   } = props
   const { t } = useI18n()
   const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort ?? null)
@@ -213,6 +225,10 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const totalPages = total === undefined ? 1 : Math.max(1, Math.ceil(total / pageSize))
   const colSpan = visible.length + (selectable ? 1 : 0)
   const hasSelection = selectable && selectedKeys.length > 0
+  const pageSizes = [...new Set([
+    ...(pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS),
+    ...(Number.isInteger(pageSize) && pageSize >= 20 ? [pageSize] : []),
+  ].filter(size => Number.isInteger(size) && size >= 20))].sort((a, b) => a - b)
 
   const columnPicker = pickable.length > 0 && (
     <Popover>
@@ -256,7 +272,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
         )}
         <div ref={scrollRef} className="overflow-x-auto" onScroll={pinned ? measure : undefined}>
         <table ref={tableRef} className="w-full text-sm" style={{ minWidth }}>
-          <thead className="bg-gray-50 border-b border-gray-200">
+           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {selectable && (
                 <th
@@ -282,7 +298,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
                     className={cn(
                       'px-4 py-3 font-medium text-gray-600 whitespace-nowrap',
                       alignClasses(col.align).header,
-                      pin ? 'z-20 bg-gray-50' : '',
+                       pin ? 'z-20 bg-gray-50' : '',
+                       stickyHeader ? 'sticky top-0 z-30 bg-gray-50 shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : '',
                       col.headerClassName,
                     )}
                     style={pinStyle(pin)}
@@ -362,13 +379,42 @@ export function DataTable<T>(props: DataTableProps<T>) {
       </div>
 
       {total !== undefined && onPageChange && (
-        <div className="flex flex-wrap gap-2 items-center justify-between text-sm text-gray-500">
+        <div className="flex min-w-0 gap-2 items-center justify-between text-sm text-gray-500">
           <span>{t('logs.total').replace('{total}', String(total))}</span>
-          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            {paginationToolbar}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+          <div className="flex w-max shrink-0 items-center gap-2 whitespace-nowrap">
+            {pageSizes.length > 0 && onPageSizeChange && (
+              <label className="flex shrink-0 items-center gap-1.5">
+                <span className="sr-only">{t('table.page_size')}</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={value => onPageSizeChange?.(Number(value))}
+                  options={pageSizes.map(size => ({ value: String(size), label: `${size} ${t('table.per_page')}` }))}
+                  aria-label={t('table.page_size')}
+                  className="h-9 w-auto min-w-[92px]"
+                />
+              </label>
+            )}
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => onPageChange(page - 1)}>{t('logs.previous')}</Button>
             <span>{t('logs.page').replace('{page}', String(page)).replace('{pages}', String(totalPages))}</span>
             <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => onPageChange(page + 1)}>{t('logs.next')}</Button>
+            {pageJump && (
+              <form className="flex shrink-0 items-center gap-1.5" onSubmit={event => { event.preventDefault(); pageJump.onSubmit() }}>
+                  <label className="sr-only" htmlFor={`table-page-jump-${paginationId ?? storageKey ?? 'default'}`}>{t('table.page_jump')}</label>
+                <input
+                  id={`table-page-jump-${paginationId ?? storageKey ?? 'default'}`}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={pageJump.value}
+                  onChange={event => pageJump.onChange(event.target.value)}
+                  aria-label={t('table.page_jump')}
+                  className="h-9 w-16 rounded-md border border-gray-300 px-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button type="submit" variant="outline" size="sm" disabled={loading}>{t('table.go')}</Button>
+              </form>
+            )}
+            {paginationToolbar}
+          </div>
           </div>
         </div>
       )}
