@@ -267,6 +267,8 @@ const load = async (nextSort = sort) => {
 - 吸顶只作用于表头,不改变 `body`、页面内容区、Sidebar、Header、Tabs 或 Dialog 的定位;不能用全局 `position: fixed` 复制一份表头,也不能给表格卡片增加 `height`/`max-height` 或竖向 `overflow`。
 - 表格内容和分页工具条必须继续自然向下展开,页面原有滚动 pane 负责纵向滚动;DataTable 的横向滚动容器只能负责横向滚动,不得成为新的纵向滚动上下文。
 - 表头与横向滚动必须同步:宽表左右滚动时吸顶表头的列仍与数据列对齐;粘性首列/末列继续由 `stickyStart`/`stickyEnd` 管理,页面不要再写 `position: sticky`。
+- 吸顶层通过同步 `scrollLeft` 跟随表体横向滚动,不得用 `transform` 平移吸顶 table;否则会破坏 `stickyStart`/`stickyEnd` 的列锁定偏移。
+- 页面滚动 pane 的顶部间距由布局内部内容层提供,吸顶表头必须贴合 Header/Tab 行下沿;业务页不要通过移动 pane padding 或限制表格高度修复间距。
 - 吸顶表头使用不透明层,避免数据行穿透;加载遮罩、弹层和焦点环的层级不能被表头遮挡。开启后需验证排序、列设置 Popover、选择框、390/768/1280 视口和 RTL。
 - 窄表或短列表不要默认启用;无明确长列表需求时保持关闭,以免增加视觉遮挡和滚动层级。
 

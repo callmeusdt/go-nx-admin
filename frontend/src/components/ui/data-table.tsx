@@ -173,12 +173,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
   // Sticky offsets depend on the rendered width of every column before (left)
   // or after (right) the cell, so the header cells are measured.
   const scrollRef = useRef<HTMLDivElement>(null)
+  const headerScrollRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
   const headerSentinelRef = useRef<HTMLTableSectionElement>(null)
   const [widths, setWidths] = useState<number[]>([])
   const [scrolled, setScrolled] = useState({ left: false, right: false })
   const [headerPinned, setHeaderPinned] = useState(false)
-  const [bodyScrollLeft, setBodyScrollLeft] = useState(0)
 
   const measure = useCallback(() => {
     const table = tableRef.current
@@ -315,14 +315,14 @@ export function DataTable<T>(props: DataTableProps<T>) {
           </div>
         )}
         {stickyHeader && headerPinned && (
-          <div className="sticky top-0 z-30 overflow-hidden border-b border-gray-200 bg-gray-50 shadow-[0_2px_4px_rgba(0,0,0,0.12)]" aria-label={t('table.sticky_header')}>
-            <table className="w-full text-sm" style={{ minWidth: tableWidth, width: tableWidth, transform: `translateX(-${bodyScrollLeft}px)` }}>
+          <div ref={headerScrollRef} className="sticky top-0 z-30 overflow-hidden border-b border-gray-200 bg-gray-50 shadow-[0_2px_4px_rgba(0,0,0,0.12)]" aria-label={t('table.sticky_header')}>
+            <table className="w-full text-sm" style={{ minWidth: tableWidth, width: tableWidth }}>
               {widths.length === cellCount && <colgroup>{widths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup>}
               {renderHeader(false)}
             </table>
           </div>
         )}
-        <div ref={scrollRef} className="overflow-x-auto" onScroll={event => { if (pinned) measure(); if (stickyHeader) setBodyScrollLeft(event.currentTarget.scrollLeft) }}>
+        <div ref={scrollRef} className="overflow-x-auto" onScroll={event => { if (pinned) measure(); if (stickyHeader && headerScrollRef.current) headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft }}>
         <table ref={tableRef} className="w-full text-sm" style={{ minWidth }}>
           {renderHeader(true, headerPinned)}
           <tbody>

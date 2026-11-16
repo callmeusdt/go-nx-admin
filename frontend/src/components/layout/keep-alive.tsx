@@ -64,8 +64,10 @@ export const KeepAliveOutlet: React.FC<{ contentMinWidth?: string }> = ({ conten
       {[...panes.current.entries()].map(([key, { element, version }]) => {
         const active = key === pathname
         return (
-          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto p-3 sm:p-4" style={{ minWidth: contentMinWidth }}>
-            <ActiveContext.Provider value={active}>{element}</ActiveContext.Provider>
+          <div key={`${key}#${version}`} data-tab-pane={key} data-active={active} hidden={!active} className="h-full overflow-auto">
+            <div className="min-h-full p-3 sm:p-4" style={{ minWidth: contentMinWidth }}>
+              <ActiveContext.Provider value={active}>{element}</ActiveContext.Provider>
+            </div>
           </div>
         )
       })}
