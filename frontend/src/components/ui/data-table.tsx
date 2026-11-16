@@ -98,6 +98,16 @@ const PIN_BG = 'bg-white group-hover:bg-gray-50'
 const PIN_BG_SELECTED = 'bg-[#f9fbff] group-hover:bg-gray-50'
 const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200]
 
+function findVerticalScrollRoot(node: HTMLElement | null): HTMLElement | null {
+  let parent = node?.parentElement ?? null
+  while (parent) {
+    const style = window.getComputedStyle(parent)
+    if (/(auto|scroll)/.test(style.overflowY)) return parent
+    parent = parent.parentElement
+  }
+  return null
+}
+
 function readHidden(storageKey?: string): string[] | null {
   if (!storageKey) return null
   try {
@@ -179,6 +189,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const [widths, setWidths] = useState<number[]>([])
   const [scrolled, setScrolled] = useState({ left: false, right: false })
   const [headerPinned, setHeaderPinned] = useState(false)
+  const measureFrame = useRef<number | null>(null)
 
   const measure = useCallback(() => {
     const table = tableRef.current
@@ -200,7 +211,10 @@ export function DataTable<T>(props: DataTableProps<T>) {
     const observer = new ResizeObserver(measure)
     observer.observe(table)
     if (scrollRef.current) observer.observe(scrollRef.current)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (measureFrame.current !== null) cancelAnimationFrame(measureFrame.current)
+    }
   }, [pinned, stickyHeader, measure, visible, selectable, rows])
 
   useEffect(() => {
@@ -210,10 +224,22 @@ export function DataTable<T>(props: DataTableProps<T>) {
     }
     const header = headerSentinelRef.current
     if (!header || typeof IntersectionObserver === 'undefined') return
-    const observer = new IntersectionObserver(([entry]) => setHeaderPinned(!entry.isIntersecting), { threshold: 0 })
+    const observer = new IntersectionObserver(([entry]) => setHeaderPinned(!entry.isIntersecting), {
+      root: findVerticalScrollRoot(header),
+      threshold: 0,
+    })
     observer.observe(header)
     return () => observer.disconnect()
   }, [stickyHeader])
+
+  useLayoutEffect(() => {
+    if (!stickyHeader || !headerPinned || !headerScrollRef.current || !scrollRef.current) return
+    headerScrollRef.current.scrollLeft = scrollRef.current.scrollLeft
+  }, [stickyHeader, headerPinned, widths, visible])
+
+  useEffect(() => () => {
+    if (measureFrame.current !== null) cancelAnimationFrame(measureFrame.current)
+  }, [])
 
   // ci is the cell's position in the row, counting the selection column.
   const cellCount = visible.length + (selectable ? 1 : 0)
@@ -247,11 +273,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const tableWidth = Math.max(minWidth, widths.reduce((sum, width) => sum + width, 0))
 
   const renderHeader = (sentinel = false, hidden = false) => (
-    <thead ref={sentinel ? headerSentinelRef : undefined} className={cn('bg-gray-50 border-b border-gray-200', hidden ? 'invisible' : '')}>
+    <thead ref={sentinel ? headerSentinelRef : undefined} aria-hidden={hidden || undefined} className={cn('bg-gray-50 border-b border-gray-200', hidden ? 'invisible pointer-events-none' : '')}>
       <tr>
         {selectable && (
           <th className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`} style={pinStyle(pinInfo(0))}>
-            <Checkbox aria-label={t('table.select_all')} checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage} disabled={selectableRows.length === 0} onCheckedChange={toggleAll} />
+            <Checkbox aria-label={t('table.select_all')} checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage} disabled={hidden || selectableRows.length === 0} onCheckedChange={toggleAll} />
           </th>
         )}
         {visible.map((col, colIndex) => {
@@ -261,12 +287,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
           return (
             <th key={col.key} aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined} className={cn('px-4 py-3 font-medium text-gray-600 whitespace-nowrap', alignClasses(col.align).header, pin ? 'z-20 bg-gray-50' : '', col.headerClassName)} style={pinStyle(pin)}>
               {sortable ? (
-                <button type="button" onClick={() => nextSort(col.key)} className="inline-flex items-center gap-1 hover:text-gray-900" title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}>
+                <button type="button" tabIndex={hidden ? -1 : undefined} onClick={() => nextSort(col.key)} className="inline-flex items-center gap-1 hover:text-gray-900" title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}>
                   {col.title}
                   {active ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
                 </button>
               ) : col.title}
-              {colIndex === visible.length - 1 && columnPicker && <span className="ml-2 inline-flex align-middle">{columnPicker}</span>}
+              {colIndex === visible.length - 1 && columnPicker && !hidden && <span className="ml-2 inline-flex align-middle">{columnPicker}</span>}
             </th>
           )
         })}
@@ -322,7 +348,15 @@ export function DataTable<T>(props: DataTableProps<T>) {
             </table>
           </div>
         )}
-        <div ref={scrollRef} className="overflow-x-auto" onScroll={event => { if (pinned) measure(); if (stickyHeader && headerScrollRef.current) headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft }}>
+        <div ref={scrollRef} className="overflow-x-auto overflow-y-clip" onScroll={event => {
+          if (pinned && measureFrame.current === null) {
+            measureFrame.current = requestAnimationFrame(() => {
+              measureFrame.current = null
+              measure()
+            })
+          }
+          if (stickyHeader && headerScrollRef.current) headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft
+        }}>
         <table ref={tableRef} className="w-full text-sm" style={{ minWidth }}>
           {renderHeader(true, headerPinned)}
           <tbody>
