@@ -26,7 +26,26 @@ export interface DataTableColumn<T> {
   headerClassName?: string
   /** Horizontal alignment shared by the column header and cell content. */
   align?: 'left' | 'center' | 'right'
+  /**
+   * Header-only grouping column. It renders `colspan` over its descendants and
+   * never participates in data rendering, sorting, sticky counts or picker
+   * storage (only leaf keys are persisted). Do not combine with
+   * `render`/`sortable`/`required`/`defaultVisible`.
+   */
+  children?: DataTableColumn<T>[]
 }
+
+type GroupedColumn<T> = DataTableColumn<T> & { children: DataTableColumn<T>[] }
+
+const isGroupColumn = <T,>(column: DataTableColumn<T>): column is GroupedColumn<T> =>
+  Array.isArray(column.children) && column.children.length > 0
+
+function flattenColumns<T>(columns: DataTableColumn<T>[]): DataTableColumn<T>[] {
+  return columns.flatMap(column => isGroupColumn(column) ? flattenColumns(column.children ?? []) : [column])
+}
+
+const columnLabel = <T,>(column: DataTableColumn<T>): string =>
+  column.label ?? (typeof column.title === 'string' ? column.title : column.key)
 
 export interface DataTableProps<T> {
   columns: DataTableColumn<T>[]
@@ -85,6 +104,15 @@ export interface DataTableProps<T> {
 
 interface PinInfo { side: 'left' | 'right'; offset: number; edge: boolean }
 
+interface HeaderNode<T> {
+  column: DataTableColumn<T>
+  group: boolean
+  depth: number
+  leafStart: number
+  leafCount: number
+  children: HeaderNode<T>[]
+}
+
 const clampCount = (n: number | undefined, max: number) => Math.max(0, Math.min(Math.floor(n ?? 0) || 0, max))
 
 const alignClasses = (align: DataTableColumn<unknown>['align'] = 'left') => ({
@@ -133,18 +161,59 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort ?? null)
   const currentSort = sort === undefined ? internalSort : sort
 
+  const leaves = useMemo(() => flattenColumns(columns), [columns])
   const [hidden, setHidden] = useState<string[]>(() =>
-    readHidden(storageKey) ?? columns.filter(c => c.defaultVisible === false).map(c => c.key))
+    readHidden(storageKey) ?? leaves.filter(c => c.defaultVisible === false).map(c => c.key))
 
   useEffect(() => {
     if (storageKey) localStorage.setItem(`nx-table-cols:${storageKey}`, JSON.stringify(hidden))
   }, [hidden, storageKey])
 
   const visible = useMemo(
-    () => columns.filter(c => c.required || !hidden.includes(c.key)),
-    [columns, hidden],
+    () => leaves.filter(c => c.required || !hidden.includes(c.key)),
+    [leaves, hidden],
   )
-  const pickable = columns.filter(c => !c.required)
+  const pickable = leaves.filter(c => !c.required)
+  const leafIndex = useMemo(() => new Map(visible.map((column, index) => [column.key, index])), [visible])
+
+  // Header nodes are built from visible leaves only, so hiding a whole group
+  // collapses its header cell instead of leaving an empty column band.
+  const visibleTree = useMemo(() => {
+    let cursor = 0
+    const walk = (columns: DataTableColumn<T>[], depth: number): HeaderNode<T>[] => {
+      const nodes: HeaderNode<T>[] = []
+      for (const column of columns) {
+        if (isGroupColumn(column)) {
+          const children = walk(column.children, depth + 1)
+          if (children.length === 0) continue
+          nodes.push({
+            column,
+            group: true,
+            depth,
+            leafStart: children[0].leafStart,
+            leafCount: children.reduce((total, child) => total + child.leafCount, 0),
+            children,
+          })
+          continue
+        }
+        if (!leafIndex.has(column.key)) continue
+        nodes.push({ column, group: false, depth, leafStart: cursor, leafCount: 1, children: [] })
+        cursor += 1
+      }
+      return nodes
+    }
+    return walk(columns, 0)
+  }, [columns, leafIndex])
+
+  const headerRows = useMemo(() => {
+    let maxDepth = 0
+    const walk = (nodes: HeaderNode<T>[]) => nodes.forEach(node => {
+      maxDepth = Math.max(maxDepth, node.depth + 1)
+      if (node.group) walk(node.children)
+    })
+    walk(visibleTree)
+    return maxDepth
+  }, [visibleTree])
 
   const selectableRows = useMemo(() => rows.filter(r => !isRowDisabled?.(r)), [rows, isRowDisabled])
   const selected = useMemo(() => new Set(selectedKeys), [selectedKeys])
@@ -195,7 +264,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
     const table = tableRef.current
     const box = scrollRef.current
     if (!table || !box) return
-    const cells = Array.from(table.tHead?.rows[0]?.cells ?? [])
+    // Group headers span several columns, so widths come from the leaf header
+    // cells (marked with data-leaf-index) instead of the first header row.
+    const selectCell = table.tHead?.querySelector<HTMLTableCellElement>('th[data-select-col]')
+    const leafCells = Array.from(table.tHead?.querySelectorAll<HTMLTableCellElement>('th[data-leaf-index]') ?? [])
+      .sort((a, b) => Number(a.dataset.leafIndex) - Number(b.dataset.leafIndex))
+    const cells = selectCell ? [selectCell, ...leafCells] : leafCells
     const next = cells.map(c => c.getBoundingClientRect().width)
     setWidths(prev => prev.length === next.length && prev.every((w, i) => Math.abs(w - next[i]) < 0.5) ? prev : next)
     const left = box.scrollLeft > 0
@@ -268,6 +342,32 @@ export function DataTable<T>(props: DataTableProps<T>) {
   }
   const selOffset = selectable ? 1 : 0
 
+  // A group header may only stick when every leaf it spans belongs to the same
+  // pinned edge; spanning fixed and scrolling columns would desync the header.
+  const groupPinInfo = (node: HeaderNode<T>): PinInfo | null => {
+    if (!pinned || widths.length !== cellCount || node.leafCount === 0) return null
+    const start = node.leafStart + selOffset
+    const end = start + node.leafCount - 1
+    const leftCells = nStart > 0 ? nStart + selOffset : 0
+    if (nStart > 0 && end < leftCells) {
+      return { side: 'left', offset: widths.slice(0, start).reduce((a, b) => a + b, 0), edge: end === leftCells - 1 }
+    }
+    if (nEnd > 0 && start >= cellCount - nEnd) {
+      return { side: 'right', offset: widths.slice(end + 1).reduce((a, b) => a + b, 0), edge: start === cellCount - nEnd }
+    }
+    return null
+  }
+
+  const nodesByLevel = useMemo(() => {
+    const levels: HeaderNode<T>[][] = []
+    const walk = (nodes: HeaderNode<T>[]) => nodes.forEach(node => {
+      ;(levels[node.depth] ??= []).push(node)
+      if (node.group) walk(node.children)
+    })
+    walk(visibleTree)
+    return levels
+  }, [visibleTree])
+
   const totalPages = total === undefined ? 1 : Math.max(1, Math.ceil(total / pageSize))
   const colSpan = visible.length + (selectable ? 1 : 0)
   const hasSelection = selectable && selectedKeys.length > 0
@@ -281,36 +381,106 @@ export function DataTable<T>(props: DataTableProps<T>) {
     const disableInteractions = visuallyHidden || a11yHidden
     return (
       <thead ref={sentinel ? headerSentinelRef : undefined} aria-hidden={a11yHidden || undefined} className={cn('bg-gray-50 border-b border-gray-200', visuallyHidden ? 'invisible pointer-events-none' : '')}>
-        <tr>
-          {selectable && (
-            <th className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`} style={pinStyle(pinInfo(0))}>
-              <Checkbox aria-label={t('table.select_all')} checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage} disabled={disableInteractions || selectableRows.length === 0} onCheckedChange={toggleAll} />
-            </th>
-          )}
-          {visible.map((col, colIndex) => {
-            const active = currentSort?.field === col.key
-            const sortable = col.sortable && !!onSortChange
-            const pin = pinInfo(colIndex + selOffset)
-            return (
-              <th key={col.key} aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined} className={cn('px-4 py-3 font-medium text-gray-600 whitespace-nowrap', alignClasses(col.align).header, pin ? 'z-20 bg-gray-50' : '', col.headerClassName)} style={pinStyle(pin)}>
-                {sortable ? (
-                  <button type="button" tabIndex={disableInteractions ? -1 : undefined} onClick={() => nextSort(col.key)} className="inline-flex items-center gap-1 hover:text-gray-900" title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}>
-                    {col.title}
-                    {active ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
-                  </button>
-                ) : col.title}
-                {colIndex === visible.length - 1 && pickable.length > 0 && (
-                  <span className={cn('ml-2 inline-flex align-middle', visuallyHidden ? 'invisible pointer-events-none' : '')}>
-                    {renderColumnPicker(disableInteractions)}
-                  </span>
-                )}
+        {nodesByLevel.map((nodes, level) => (
+          <tr key={level}>
+            {level === 0 && selectable && (
+              <th data-select-col rowSpan={headerRows} className={`w-10 px-4 py-3 ${pinInfo(0) ? 'z-20 bg-gray-50' : ''}`} style={pinStyle(pinInfo(0))}>
+                <Checkbox aria-label={t('table.select_all')} checked={someOnPage && !allOnPage ? 'indeterminate' : allOnPage} disabled={disableInteractions || selectableRows.length === 0} onCheckedChange={toggleAll} />
               </th>
-            )
-          })}
-        </tr>
+            )}
+            {nodes.map(node => {
+              const divider = level < headerRows - 1 ? 'border-b border-gray-100' : ''
+              if (node.group) {
+                const pin = groupPinInfo(node)
+                return (
+                  <th
+                    key={node.column.key}
+                    scope="colgroup"
+                    colSpan={node.leafCount}
+                    className={cn('px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap', alignClasses(node.column.align).header, divider, pin ? 'z-20 bg-gray-50' : '', node.column.headerClassName)}
+                    style={pinStyle(pin)}
+                  >
+                    {node.column.title}
+                  </th>
+                )
+              }
+              const col = node.column
+              const active = currentSort?.field === col.key
+              const sortable = col.sortable && !!onSortChange
+              const pin = pinInfo(node.leafStart + selOffset)
+              const lastLeaf = node.leafStart === visible.length - 1
+              return (
+                <th
+                  key={col.key}
+                  data-leaf-index={node.leafStart}
+                  scope="col"
+                  rowSpan={headerRows - level}
+                  aria-sort={active ? (currentSort!.order === 'asc' ? 'ascending' : 'descending') : undefined}
+                  className={cn('px-4 py-3 font-medium text-gray-600 whitespace-nowrap', alignClasses(col.align).header, divider, pin ? 'z-20 bg-gray-50' : '', col.headerClassName)}
+                  style={pinStyle(pin)}
+                >
+                  {sortable ? (
+                    <button type="button" tabIndex={disableInteractions ? -1 : undefined} onClick={() => nextSort(col.key)} className="inline-flex items-center gap-1 hover:text-gray-900" title={active ? t(currentSort!.order === 'asc' ? 'table.sort_asc' : 'table.sort_desc') : t('table.sort')}>
+                      {col.title}
+                      {active ? (currentSort!.order === 'asc' ? <ArrowUp aria-label={t('table.sort_asc')} className="w-3 h-3" /> : <ArrowDown aria-label={t('table.sort_desc')} className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 text-gray-300" />}
+                    </button>
+                  ) : col.title}
+                  {lastLeaf && pickable.length > 0 && (
+                    <span className={cn('ml-2 inline-flex align-middle', visuallyHidden ? 'invisible pointer-events-none' : '')}>
+                      {renderColumnPicker(disableInteractions)}
+                    </span>
+                  )}
+                </th>
+              )
+            })}
+          </tr>
+        ))}
       </thead>
     )
   }
+
+  const hideLeaves = (keys: string[], hide: boolean) => setHidden(current =>
+    hide ? [...new Set([...current, ...keys])] : current.filter(key => !keys.includes(key)))
+
+  const renderPickerLevel = (nodes: DataTableColumn<T>[], depth = 0): React.ReactNode[] =>
+    nodes.flatMap(column => {
+      const indent = { paddingInlineStart: 8 + depth * 16 }
+      if (!isGroupColumn(column)) {
+        if (column.required) return []
+        const visibleLeaf = !hidden.includes(column.key)
+        return [
+          <label key={column.key} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100" style={indent}>
+            <Checkbox
+              checked={visibleLeaf}
+              onCheckedChange={() => hideLeaves([column.key], visibleLeaf)}
+              aria-label={columnLabel(column)}
+            />
+            {columnLabel(column)}
+          </label>,
+        ]
+      }
+      const groupLeaves = flattenColumns(column.children).filter(leaf => !leaf.required)
+      const shown = groupLeaves.filter(leaf => !hidden.includes(leaf.key)).length
+      const checked: boolean | 'indeterminate' = groupLeaves.length === 0 || shown === groupLeaves.length
+        ? true
+        : shown === 0 ? false : 'indeterminate'
+      return [
+        <label
+          key={column.key}
+          className={cn('flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm', groupLeaves.length > 0 ? 'cursor-pointer hover:bg-gray-100' : 'opacity-70')}
+          style={indent}
+        >
+          <Checkbox
+            checked={checked}
+            disabled={groupLeaves.length === 0}
+            onCheckedChange={() => hideLeaves(groupLeaves.map(leaf => leaf.key), checked === true)}
+            aria-label={columnLabel(column)}
+          />
+          <span className="font-medium">{columnLabel(column)}</span>
+        </label>,
+        ...renderPickerLevel(column.children, depth + 1),
+      ]
+    })
 
   const renderColumnPicker = (disabled = false) => pickable.length > 0 && (
     <Popover>
@@ -327,16 +497,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
         </PopoverTrigger>
       </Tooltip>
       <PopoverContent>
-        {pickable.map(col => (
-          <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100">
-            <Checkbox
-              checked={!hidden.includes(col.key)}
-              onCheckedChange={() => setHidden(h => h.includes(col.key) ? h.filter(k => k !== col.key) : [...h, col.key])}
-              aria-label={col.label ?? (typeof col.title === 'string' ? col.title : col.key)}
-            />
-            {col.label ?? (typeof col.title === 'string' ? col.title : col.key)}
-          </label>
-        ))}
+        <div className="max-h-80 overflow-y-auto">{renderPickerLevel(columns)}</div>
       </PopoverContent>
     </Popover>
   )

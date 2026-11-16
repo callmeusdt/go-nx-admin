@@ -8,7 +8,7 @@ import '../src/index.css'
 const rows = [{ id: 1, name: 'First row' }]
 
 const Fixture: React.FC = () => (
-  <I18nProvider>
+  <I18nProvider options={{ defaultLocale: 'en-US' }}>
     <main>
       <DataTable
         columns={[
@@ -25,7 +25,8 @@ const Fixture: React.FC = () => (
         onSortChange={() => undefined}
         paginationToolbar={<button type="button">Custom page control</button>}
       />
-      <Dialog open>
+      {/* Non-modal so the rest of the fixture stays in the accessibility tree. */}
+      <Dialog open modal={false}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>A very long dialog title that must remain readable</DialogTitle>
